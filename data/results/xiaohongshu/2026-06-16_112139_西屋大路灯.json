@@ -1,0 +1,32 @@
+{
+  "brand": "西屋大路灯",
+  "platform": "xiaohongshu",
+  "platform_name": "小红书",
+  "search_url": "https://www.xiaohongshu.com",
+  "total_found": 2,
+  "users": [
+    {
+      "name": "西安大和路灯厂",
+      "profile_url": "https://www.xiaohongshu.com/user/profile/60d11bd2000000000101f416",
+      "verification": "none",
+      "verify_type": "",
+      "xhs_id": "2672724233",
+      "follower_count": "8",
+      "note_count": "7",
+      "description": "",
+      "platform": "xiaohongshu"
+    },
+    {
+      "name": "护眼大路灯专业测评推荐",
+      "profile_url": "https://www.xiaohongshu.com/user/profile/60eab8da000000000100765a",
+      "verification": "none",
+      "verify_type": "",
+      "xhs_id": "9534336532",
+      "follower_count": "14",
+      "note_count": "7",
+      "description": "",
+      "platform": "xiaohongshu"
+    }
+  ],
+  "error": ""
+}

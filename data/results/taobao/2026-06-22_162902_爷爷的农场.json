@@ -1,0 +1,150 @@
+{
+  "brand": "爷爷的农场",
+  "platform": "taobao",
+  "platform_name": "淘宝",
+  "search_url": "https://s.taobao.com/search?q=%E7%88%B7%E7%88%B7%E7%9A%84%E5%86%9C%E5%9C%BA&type=shop",
+  "total_found": 24,
+  "users": [
+    {
+      "name": "爷爷的农场官方旗舰店",
+      "profile_url": "https://shop404304814.taobao.com/category.htm",
+      "follower_count": "318万",
+      "verify_type": "淘宝认证",
+      "platform": "taobao"
+    },
+    {
+      "name": "爷爷的农场母婴旗舰店",
+      "profile_url": "https://shop216618061.taobao.com/category.htm",
+      "follower_count": "23331",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "爷爷的农场食品旗舰店",
+      "profile_url": "https://shop237127850.taobao.com/category.htm",
+      "follower_count": "12510",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "爷爷的农场品牌店",
+      "profile_url": "https://shop293105968.taobao.com/category.htm",
+      "follower_count": "18354",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "爷爷的农场艾妮岛专卖店",
+      "profile_url": "https://shop386357651.taobao.com/category.htm",
+      "follower_count": "8927",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "爷爷的农场母婴品牌店",
+      "profile_url": "https://shop388675339.taobao.com/category.htm",
+      "follower_count": "2961",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "爷爷的农场笃行专卖店",
+      "profile_url": "https://shop518391515.taobao.com/category.htm",
+      "follower_count": "113",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "爷爷的农场康童专卖店",
+      "profile_url": "https://shop537305783.taobao.com/category.htm",
+      "follower_count": "2640",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "爷爷的农场婴童洗护旗舰店",
+      "profile_url": "https://shop274023397.taobao.com/category.htm",
+      "follower_count": "53468",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "天猫超市",
+      "profile_url": "https://shop67597230.taobao.com/category.htm",
+      "follower_count": "8153万",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "鲁爷爷的农场旗舰店",
+      "profile_url": "https://shop383148355.taobao.com/category.htm",
+      "follower_count": "816",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "英氏品牌店",
+      "profile_url": "https://shop485821014.taobao.com/category.htm",
+      "follower_count": "15.8万",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "英氏品牌",
+      "profile_url": "https://shop554160216.taobao.com/category.htm",
+      "follower_count": "19704",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "认养一头牛儿童旗舰店",
+      "profile_url": "https://shop434094254.taobao.com/category.htm",
+      "follower_count": "24285",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "英氏安宝乐母婴企业店",
+      "profile_url": "https://shop129776801.taobao.com/category.htm",
+      "follower_count": "11218",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "塞纳牧官方旗舰店",
+      "profile_url": "https://shop523518654.taobao.com/category.htm",
+      "follower_count": "72733",
+      "verify_type": "淘宝认证",
+      "platform": "taobao"
+    },
+    {
+      "name": "英氏旗舰店",
+      "profile_url": "https://shop59280985.taobao.com/category.htm",
+      "follower_count": "308万",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "认养旗舰店",
+      "profile_url": "https://shop501972783.taobao.com/category.htm",
+      "follower_count": "15.7万",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "英氏母婴专营",
+      "profile_url": "https://shop116989958.taobao.com/category.htm",
+      "follower_count": "14.4万",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "英氏品牌馆",
+      "profile_url": "https://shop215941378.taobao.com/category.htm",
+      "follower_count": "10189",
+      "verify_type": "",
+      "platform": "taobao"
+    }
+  ],
+  "error": ""
+}

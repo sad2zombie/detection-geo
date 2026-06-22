@@ -1,0 +1,26 @@
+{
+  "brand": "澄心优租",
+  "platform": "jd",
+  "platform_name": "京东",
+  "search_url": "https://search.jd.com/Search?enc=utf-8&keyword=%E6%BE%84%E5%BF%83%E4%BC%98%E7%A7%9F&shop=1",
+  "total_found": 2,
+  "users": [
+    {
+      "name": "澄心优租官方旗舰店",
+      "profile_url": "https://mall.jd.com/index-16945609.html",
+      "follower_count": "",
+      "verify_type": "京东认证",
+      "shop_tag": "",
+      "platform": "jd"
+    },
+    {
+      "name": "澄心优租买手店",
+      "profile_url": "https://mall.jd.com/index-52738228.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "",
+      "platform": "jd"
+    }
+  ],
+  "error": ""
+}

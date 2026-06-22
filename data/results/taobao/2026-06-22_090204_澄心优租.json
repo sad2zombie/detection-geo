@@ -1,0 +1,150 @@
+{
+  "brand": "澄心优租",
+  "platform": "taobao",
+  "platform_name": "淘宝",
+  "search_url": "https://s.taobao.com/search?q=%E6%BE%84%E5%BF%83%E4%BC%98%E7%A7%9F&type=shop",
+  "total_found": 24,
+  "users": [
+    {
+      "name": "澄心优租",
+      "profile_url": "https://shop406472936.taobao.com/category.htm",
+      "follower_count": "132",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "星河租赁",
+      "profile_url": "https://shop276409444.taobao.com/category.htm",
+      "follower_count": "17120",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "派大星数码租赁店",
+      "profile_url": "https://shop534896882.taobao.com/category.htm",
+      "follower_count": "1525",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "腔调会员精选旗舰店",
+      "profile_url": "https://shop503709453.taobao.com/category.htm",
+      "follower_count": "54.0万",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "UOLEN优冷高低温流体企业店",
+      "profile_url": "https://shop582432194.taobao.com/category.htm",
+      "follower_count": "10155",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "天下烧友是一家",
+      "profile_url": "https://shop252276336.taobao.com/category.htm",
+      "follower_count": "10504",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "朵朵妈NU折扣店",
+      "profile_url": "https://shop194197198.taobao.com/category.htm",
+      "follower_count": "20768",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "北辰遴选领航店",
+      "profile_url": "https://shop126805665.taobao.com/category.htm",
+      "follower_count": "23027",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "惠普中国官方旗舰店",
+      "profile_url": "https://shop57301367.taobao.com/category.htm",
+      "follower_count": "356万",
+      "verify_type": "淘宝认证",
+      "platform": "taobao"
+    },
+    {
+      "name": "天猫超市",
+      "profile_url": "https://shop67597230.taobao.com/category.htm",
+      "follower_count": "8153万",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "联想官方旗舰店",
+      "profile_url": "https://shop57301063.taobao.com/category.htm",
+      "follower_count": "785万",
+      "verify_type": "淘宝认证",
+      "platform": "taobao"
+    },
+    {
+      "name": "宅网数码租赁",
+      "profile_url": "https://shop110046468.taobao.com/category.htm",
+      "follower_count": "1433",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "Mac优品数码",
+      "profile_url": "https://shop36691943.taobao.com/category.htm",
+      "follower_count": "10561",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "轩扬电脑科技",
+      "profile_url": "https://shop104676352.taobao.com/category.htm",
+      "follower_count": "13722",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "星汇数码上海店",
+      "profile_url": "https://shop61369823.taobao.com/category.htm",
+      "follower_count": "24767",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "联想艾克兰斯专卖店",
+      "profile_url": "https://shop62265499.taobao.com/category.htm",
+      "follower_count": "31.3万",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "布丁母婴 吸奶器租赁",
+      "profile_url": "https://shop350498225.taobao.com/category.htm",
+      "follower_count": "3845",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "享趣玩租赁",
+      "profile_url": "https://shop64805224.taobao.com/category.htm",
+      "follower_count": "7325",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "薇薇娜数码商城",
+      "profile_url": "https://shop35863431.taobao.com/category.htm",
+      "follower_count": "48037",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "咪星数码租赁",
+      "profile_url": "https://shop150801124.taobao.com/category.htm",
+      "follower_count": "422",
+      "verify_type": "",
+      "platform": "taobao"
+    }
+  ],
+  "error": ""
+}

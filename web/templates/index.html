@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>品牌检测系统</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 品牌认证检测系统</h1>
+            <p class="subtitle">多平台品牌搜索 · 认证状态检测 · AI智能分析</p>
+        </header>
+
+        <!-- 登录状态 -->
+        <section class="card" id="auth-section">
+            <h2>📱 平台登录状态</h2>
+            <div class="platform-cards" id="auth-status">
+                <span class="loading">检测中...</span>
+            </div>
+        </section>
+
+        <!-- 搜索 -->
+        <section class="card" id="search-section">
+            <h2>🔎 品牌搜索</h2>
+            <div class="search-bar">
+                <input type="text" id="keyword" placeholder="输入品牌关键词，如：西屋大路灯" autofocus>
+            </div>
+            <div class="platform-select-bar" id="platform-select-bar"></div>
+            <div class="btn-row">
+                <button class="btn btn-primary" onclick="startSearch()">🚀 搜索</button>
+            </div>
+            <div id="search-progress" class="progress-area" style="display:none;"></div>
+        </section>
+
+        <!-- 结果 -->
+        <section class="card" id="result-section" style="display:none;">
+            <h2>📊 搜索结果</h2>
+            <div id="search-results"></div>
+            <div class="btn-row" id="analyze-row" style="display:none;">
+                <button class="btn btn-accent" onclick="startAnalysis()">🤖 AI 分析结果</button>
+            </div>
+            <div id="analyze-progress" class="progress-area" style="display:none;"></div>
+        </section>
+
+        <!-- 报告 -->
+        <section class="card" id="report-section" style="display:none;">
+            <h2>📋 品牌检测报告</h2>
+            <div id="report-content" class="report"></div>
+        </section>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+{
+  "brand": "爷爷的农场",
+  "platform": "jd",
+  "platform_name": "京东",
+  "search_url": "https://search.jd.com/Search?enc=utf-8&keyword=%E7%88%B7%E7%88%B7%E7%9A%84%E5%86%9C%E5%9C%BA&shop=1",
+  "total_found": 20,
+  "users": [
+    {
+      "name": "爷爷的农场京东自营旗舰店",
+      "profile_url": "https://mall.jd.com/index-1000308441.html",
+      "follower_count": "",
+      "verify_type": "京东自营",
+      "shop_tag": "回头客10万+",
+      "platform": "jd"
+    },
+    {
+      "name": "爷爷的农场官方旗舰店",
+      "profile_url": "https://mall.jd.com/index-12998473.html",
+      "follower_count": "",
+      "verify_type": "京东认证",
+      "shop_tag": "本周上新",
+      "platform": "jd"
+    },
+    {
+      "name": "爷爷的农场母婴旗舰店",
+      "profile_url": "https://mall.jd.com/index-13759377.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "本周上新",
+      "platform": "jd"
+    },
+    {
+      "name": "卡碧尼熊母婴工作室",
+      "profile_url": "https://mall.jd.com/index-223604521.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "",
+      "platform": "jd"
+    },
+    {
+      "name": "爷爷的农场旗舰店",
+      "profile_url": "https://mall.jd.com/index-10236839.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "回头客8千",
+      "platform": "jd"
+    },
+    {
+      "name": "爷爷的农场四久时专卖店",
+      "profile_url": "https://mall.jd.com/index-16910750.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "本周上新",
+      "platform": "jd"
+    },
+    {
+      "name": "杭猫母婴臻选店",
+      "profile_url": "https://mall.jd.com/index-14972009.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "本周上新",
+      "platform": "jd"
+    },
+    {
+      "name": "爷爷的农场食品京东自营旗舰店",
+      "profile_url": "https://mall.jd.com/index-1000483674.html",
+      "follower_count": "",
+      "verify_type": "京东自营",
+      "shop_tag": "回头客6千",
+      "platform": "jd"
+    },
+    {
+      "name": "英贝乐母婴旗舰店",
+      "profile_url": "https://mall.jd.com/index-10371006.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "本周上新",
+      "platform": "jd"
+    },
+    {
+      "name": "爷爷的农场康童专卖店",
+      "profile_url": "https://mall.jd.com/index-13734136.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "回头客3千",
+      "platform": "jd"
+    },
+    {
+      "name": "爱婴室旗舰店",
+      "profile_url": "https://mall.jd.com/index-10372385.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "本周上新",
+      "platform": "jd"
+    },
+    {
+      "name": "雨泽母婴专营店",
+      "profile_url": "https://mall.jd.com/index-745274.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "本周上新",
+      "platform": "jd"
+    },
+    {
+      "name": "沭阳恒辉商贸专营店",
+      "profile_url": "https://mall.jd.com/index-765520.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "8年老店",
+      "platform": "jd"
+    },
+    {
+      "name": "兰芝初母婴官方旗舰店",
+      "profile_url": "https://mall.jd.com/index-853532.html",
+      "follower_count": "",
+      "verify_type": "京东认证",
+      "shop_tag": "回头客2千",
+      "platform": "jd"
+    },
+    {
+      "name": "时尚妹妹1818小店",
+      "profile_url": "https://mall.jd.com/index-13069824.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "本周上新",
+      "platform": "jd"
+    },
+    {
+      "name": "星辰万晟母婴专营店",
+      "profile_url": "https://mall.jd.com/index-12384474.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "回头客2千",
+      "platform": "jd"
+    },
+    {
+      "name": "萱正母婴专营店",
+      "profile_url": "https://mall.jd.com/index-273024211.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "本周上新",
+      "platform": "jd"
+    },
+    {
+      "name": "临期清仓专区",
+      "profile_url": "https://mall.jd.com/index-1000482701.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "本周上新",
+      "platform": "jd"
+    },
+    {
+      "name": "Ole精品超市官方旗舰店",
+      "profile_url": "https://mall.jd.com/index-19874691.html",
+      "follower_count": "",
+      "verify_type": "京东认证",
+      "shop_tag": "本周上新",
+      "platform": "jd"
+    },
+    {
+      "name": "全球商品店",
+      "profile_url": "https://mall.jd.com/index-17623091.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "",
+      "platform": "jd"
+    }
+  ],
+  "error": ""
+}

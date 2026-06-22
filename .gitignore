@@ -1,0 +1,55 @@
+# ===== Cookies & 浏览器 Profile =====
+# 大型登录态文件，不入库
+data/cookies/
+cookies/
+*.cookie.json
+*-cookies.json
+
+# Playwright / CloakBrowser 用户数据目录
+browser_profiles/
+user_data/
+*.userdata/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ===== 大文件 / 临时文件 =====
+*.log
+*.tmp
+*.bak
+*.cache
+
+# ===== 环境配置（敏感）=====
+.env
+.env.local
+.env.*.local
+
+# ===== 测试输出与临时产物 =====
+__pycache__/
+.idea/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+
+# 测试输出
+*_test.py
+output_*.json
+*_result.json
+screenshot_*.png

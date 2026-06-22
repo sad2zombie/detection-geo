@@ -1,0 +1,90 @@
+{
+  "brand": "西屋",
+  "platform": "jd",
+  "platform_name": "京东",
+  "search_url": "https://search.jd.com/Search?enc=utf-8&keyword=%E8%A5%BF%E5%B1%8B&shop=1",
+  "total_found": 10,
+  "users": [
+    {
+      "name": "西屋（Westinghouse）家具旗舰店",
+      "profile_url": "https://mall.jd.com/index-10057020.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "6年老店",
+      "platform": "jd"
+    },
+    {
+      "name": "西屋按摩椅旗舰店",
+      "profile_url": "https://mall.jd.com/index-10170937.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "6年老店",
+      "platform": "jd"
+    },
+    {
+      "name": "西屋个护健康旗舰店",
+      "profile_url": "https://mall.jd.com/index-834388.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "7年老店",
+      "platform": "jd"
+    },
+    {
+      "name": "西屋健康电器京东自营旗舰店",
+      "profile_url": "https://mall.jd.com/index-1000224449.html",
+      "follower_count": "",
+      "verify_type": "京东自营",
+      "shop_tag": "回头客2千",
+      "platform": "jd"
+    },
+    {
+      "name": "美国西屋厨房电器京东自营旗舰店",
+      "profile_url": "https://mall.jd.com/index-1000078089.html",
+      "follower_count": "",
+      "verify_type": "京东自营",
+      "shop_tag": "回头客6千",
+      "platform": "jd"
+    },
+    {
+      "name": "西屋（Westinghouse）净水京东自营旗舰店",
+      "profile_url": "https://mall.jd.com/index-1000351993.html",
+      "follower_count": "",
+      "verify_type": "京东自营",
+      "shop_tag": "5年老店",
+      "platform": "jd"
+    },
+    {
+      "name": "西屋净水旗舰店",
+      "profile_url": "https://mall.jd.com/index-598903.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "回头客3千",
+      "platform": "jd"
+    },
+    {
+      "name": "西屋清洁电器京东自营旗舰店",
+      "profile_url": "https://mall.jd.com/index-1000580572.html",
+      "follower_count": "",
+      "verify_type": "京东自营",
+      "shop_tag": "粉丝1.4万",
+      "platform": "jd"
+    },
+    {
+      "name": "西屋净饮水官方旗舰店",
+      "profile_url": "https://mall.jd.com/index-12409996.html",
+      "follower_count": "",
+      "verify_type": "京东认证",
+      "shop_tag": "回头客2千",
+      "platform": "jd"
+    },
+    {
+      "name": "西屋清洁电器旗舰店",
+      "profile_url": "https://mall.jd.com/index-10287602.html",
+      "follower_count": "",
+      "verify_type": "",
+      "shop_tag": "回头客2千",
+      "platform": "jd"
+    }
+  ],
+  "error": ""
+}

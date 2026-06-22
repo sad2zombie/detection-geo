@@ -1,0 +1,150 @@
+{
+  "brand": "西屋",
+  "platform": "taobao",
+  "platform_name": "淘宝",
+  "search_url": "https://s.taobao.com/search?q=%E8%A5%BF%E5%B1%8B&type=shop",
+  "total_found": 20,
+  "users": [
+    {
+      "name": "西屋旗舰店",
+      "profile_url": "https://shop463327112.taobao.com/category.htm",
+      "follower_count": "10.3万",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "西屋厨房电器旗舰店",
+      "profile_url": "https://shop209920219.taobao.com/category.htm",
+      "follower_count": "36134",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "西屋个人护理旗舰店",
+      "profile_url": "https://shop210133126.taobao.com/category.htm",
+      "follower_count": "60.3万",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "西屋净水旗舰店",
+      "profile_url": "https://shop478067344.taobao.com/category.htm",
+      "follower_count": "8872",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "西屋德宝专卖店",
+      "profile_url": "https://shop241086592.taobao.com/category.htm",
+      "follower_count": "1920",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "西屋周佳专卖店",
+      "profile_url": "https://shop562246957.taobao.com/category.htm",
+      "follower_count": "51393",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "西屋自营店",
+      "profile_url": "https://shop123288689.taobao.com/category.htm",
+      "follower_count": "13572",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "西屋稚悦专卖店",
+      "profile_url": "https://shop273988087.taobao.com/category.htm",
+      "follower_count": "4372",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "西屋贝贝康专卖店",
+      "profile_url": "https://shop175644070.taobao.com/category.htm",
+      "follower_count": "1484",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "西屋快点专卖店",
+      "profile_url": "https://shop408448517.taobao.com/category.htm",
+      "follower_count": "8813",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "美国西屋电器企业店",
+      "profile_url": "https://shop426721398.taobao.com/category.htm",
+      "follower_count": "2769",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "美国西屋科技产品优享店",
+      "profile_url": "https://shop370367156.taobao.com/category.htm",
+      "follower_count": "847",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "Westinghouse江门专卖店",
+      "profile_url": "https://shop574204686.taobao.com/category.htm",
+      "follower_count": "176",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "老爸评测会员店",
+      "profile_url": "https://shop316785327.taobao.com/category.htm",
+      "follower_count": "381万",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "天猫超市",
+      "profile_url": "https://shop67597230.taobao.com/category.htm",
+      "follower_count": "8153万",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "摩恩电器精选店",
+      "profile_url": "https://shop449757518.taobao.com/category.htm",
+      "follower_count": "18080",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "高端品牌电器折扣商城",
+      "profile_url": "https://shop128002098.taobao.com/category.htm",
+      "follower_count": "142",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "远洋国际贸易直销店",
+      "profile_url": "https://shop226001327.taobao.com/category.htm",
+      "follower_count": "2200",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "西屋清洁电器旗舰店",
+      "profile_url": "https://shop252171813.taobao.com/category.htm",
+      "follower_count": "24494",
+      "verify_type": "",
+      "platform": "taobao"
+    },
+    {
+      "name": "萌萌品牌集合店",
+      "profile_url": "https://shop33772754.taobao.com/category.htm",
+      "follower_count": "3942",
+      "verify_type": "",
+      "platform": "taobao"
+    }
+  ],
+  "error": ""
+}

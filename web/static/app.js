@@ -366,18 +366,53 @@ async function startBrandAnalysis() {
         const res = await fetch("/api/analyze_brand");
         const data = await res.json();
         if (Object.keys(data).length === 0) {
-            resultEl.innerHTML = '<p style="color:var(--text-secondary)">暂无分析结果，请先进行百度搜索。</p>';
+            resultEl.innerHTML = '<p style="color:var(--text-secondary)">暂无分析结果，请先进行搜索。</p>';
             return;
         }
-        const rows = Object.entries(data).map(([platform, info]) =>
-            `<tr><td>${info.platform || platform}</td><td>${info.score ?? "-"}</td><td>${info.assessment_grade || "-"}</td></tr>`
-        ).join("");
-        resultEl.innerHTML = `
-            <h3>🔍 品牌匹配分析</h3>
-            <table style="width:100%; border-collapse:collapse;">
-                <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">平台</th><th style="padding:8px;">匹配得分</th><th style="padding:8px;">认证等级</th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>`;
+        let html = "";
+
+        if (data.baidu) {
+            html += `
+                <h3>🔍 品牌匹配分析（百度）</h3>
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">平台</th><th style="padding:8px;">匹配得分</th><th style="padding:8px;">认证等级</th></tr></thead>
+                    <tbody><tr><td>${data.baidu.platform || "baidu"}</td><td>${data.baidu.score ?? "-"}</td><td>${data.baidu.assessment_grade || "-"}</td></tr></tbody>
+                </table>`;
+        }
+
+        if (data.douyin && data.douyin.blue_v_users && data.douyin.blue_v_users.length > 0) {
+            html += `<h3 style="margin-top:24px;">🔍 抖音蓝V账号（粉丝排名前3）</h3>`;
+            html += `<table style="width:100%; border-collapse:collapse;">
+                <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">#</th><th style="padding:8px;">名称</th><th style="padding:8px;">抖音号</th><th style="padding:8px;">主页链接</th></tr></thead>
+                <tbody>`;
+            data.douyin.blue_v_users.forEach((u, i) => {
+                html += `<tr>
+                    <td style="padding:8px;">${i + 1}</td>
+                    <td style="padding:8px;">${u.name || "-"}</td>
+                    <td style="padding:8px;">${u.douyin_id || "-"}</td>
+                    <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" target="_blank">${u.profile_url}</a>` : "-"}</td>
+                </tr>`;
+            });
+            html += `</tbody></table>`;
+        }
+
+        if (data.xiaohongshu && data.xiaohongshu.enterprise_users && data.xiaohongshu.enterprise_users.length > 0) {
+            html += `<h3 style="margin-top:24px;">🔍 小红书企业认证账号（粉丝排名前3）</h3>`;
+            html += `<table style="width:100%; border-collapse:collapse;">
+                <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">#</th><th style="padding:8px;">名称</th><th style="padding:8px;">小红书号</th><th style="padding:8px;">主页链接</th></tr></thead>
+                <tbody>`;
+            data.xiaohongshu.enterprise_users.forEach((u, i) => {
+                html += `<tr>
+                    <td style="padding:8px;">${i + 1}</td>
+                    <td style="padding:8px;">${u.name || "-"}</td>
+                    <td style="padding:8px;">${u.xhs_id || "-"}</td>
+                    <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" target="_blank">${u.profile_url}</a>` : "-"}</td>
+                </tr>`;
+            });
+            html += `</tbody></table>`;
+        }
+
+        resultEl.innerHTML = html;
     } catch (e) {
         resultEl.innerHTML = `<p style="color:#e74c3c;">加载失败: ${e.message}</p>`;
     }

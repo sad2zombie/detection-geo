@@ -239,8 +239,22 @@ async def api_analyze(request: Request):
 # ---------- API: 品牌匹配分析 ----------
 @app.get("/api/analyze_brand")
 async def api_get_analysis():
-    """查询已暂存的品牌匹配分析结果"""
-    return JSONResponse(analysis_cache)
+    """查询已暂存的分析结果，返回有数据的平台"""
+    from core.search_engine import preprocessed_cache
+    result = {}
+    if "baidu" in analysis_cache:
+        result["baidu"] = analysis_cache["baidu"]
+    if "douyin" in preprocessed_cache:
+        result["douyin"] = {
+            "platform": "douyin",
+            "blue_v_users": preprocessed_cache["douyin"],
+        }
+    if "xiaohongshu" in preprocessed_cache:
+        result["xiaohongshu"] = {
+            "platform": "xiaohongshu",
+            "enterprise_users": preprocessed_cache["xiaohongshu"],
+        }
+    return JSONResponse(result)
 
 
 # ---------- API: 报告列表 ----------

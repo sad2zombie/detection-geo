@@ -5,6 +5,8 @@ from openai import OpenAI
 from config import BAILIAN_API_KEY, BAILIAN_MODEL
 from platforms.base import SearchResult
 
+from core.search_engine import preprocessed_cache
+
 
 def build_analysis_prompt(brand: str, results: list[SearchResult]) -> str:
     """构建给大模型的分析 prompt"""
@@ -49,6 +51,27 @@ def build_analysis_prompt(brand: str, results: list[SearchResult]) -> str:
         if r.get("error"):
             parts.append(f"搜索出错: {r['error']}")
             continue
+
+        # 抖音：使用预处理后的蓝V数据
+        if r.get("platform") == "douyin" and "douyin" in preprocessed_cache:
+            for i, u in enumerate(preprocessed_cache["douyin"], 1):
+                parts.append(
+                    f"  {i}. {u.get('name', '未知')} | 认证: 蓝V"
+                    + (f" | 抖音号: {u.get('douyin_id', '')}" if u.get('douyin_id') else "")
+                    + f" | 链接: {u.get('profile_url', '')}"
+                )
+            continue
+
+        # 小红书：使用预处理后的企业认证数据
+        if r.get("platform") == "xiaohongshu" and "xiaohongshu" in preprocessed_cache:
+            for i, u in enumerate(preprocessed_cache["xiaohongshu"], 1):
+                parts.append(
+                    f"  {i}. {u.get('name', '未知')} | 认证: 企业认证"
+                    + (f" | 小红书号: {u.get('xhs_id', '')}" if u.get('xhs_id') else "")
+                    + f" | 链接: {u.get('profile_url', '')}"
+                )
+            continue
+
         for i, u in enumerate(r.get("users", [])[:15], 1):
             label = {"blue_v": "蓝V", "yellow_v": "黄V", "official": "官方", "verified": "已认证", "none": "无认证", "unknown": "未知"}
             v = label.get(u.get("verification", "unknown"), "未知")

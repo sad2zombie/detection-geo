@@ -54,22 +54,26 @@ def build_analysis_prompt(brand: str, results: list[SearchResult]) -> str:
 
         # 抖音：使用预处理后的蓝V数据
         if r.get("platform") == "douyin" and "douyin" in preprocessed_cache:
-            for i, u in enumerate(preprocessed_cache["douyin"], 1):
-                parts.append(
-                    f"  {i}. {u.get('name', '未知')} | 认证: 蓝V"
-                    + (f" | 抖音号: {u.get('douyin_id', '')}" if u.get('douyin_id') else "")
-                    + f" | 链接: {u.get('profile_url', '')}"
-                )
+            dy_data = preprocessed_cache["douyin"]
+            if dy_data:
+                for i, u in enumerate(dy_data, 1):
+                    parts.append(
+                        f"  {i}. {u.get('name', '未知')} | 认证: 蓝V"
+                        + (f" | 抖音号: {u.get('douyin_id', '')}" if u.get('douyin_id') else "")
+                        + f" | 链接: {u.get('profile_url', '')}"
+                    )
             continue
 
         # 小红书：使用预处理后的企业认证数据
         if r.get("platform") == "xiaohongshu" and "xiaohongshu" in preprocessed_cache:
-            for i, u in enumerate(preprocessed_cache["xiaohongshu"], 1):
-                parts.append(
-                    f"  {i}. {u.get('name', '未知')} | 认证: 企业认证"
-                    + (f" | 小红书号: {u.get('xhs_id', '')}" if u.get('xhs_id') else "")
-                    + f" | 链接: {u.get('profile_url', '')}"
-                )
+            xhs_data = preprocessed_cache["xiaohongshu"]
+            if xhs_data:
+                for i, u in enumerate(xhs_data, 1):
+                    parts.append(
+                        f"  {i}. {u.get('name', '未知')} | 认证: 企业认证"
+                        + (f" | 小红书号: {u.get('xhs_id', '')}" if u.get('xhs_id') else "")
+                        + f" | 链接: {u.get('profile_url', '')}"
+                    )
             continue
 
         for i, u in enumerate(r.get("users", [])[:15], 1):

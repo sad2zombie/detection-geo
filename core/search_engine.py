@@ -29,9 +29,12 @@ def _parse_follower_count(raw: str | int | float | None) -> float | None:
         return None
 
 
-def _preprocess_douyin_users(users: list[dict]) -> list[dict]:
-    """抖音预处理：过滤蓝V → 按粉丝数降序 → 取前3 → 精简字段 → URL脱敏"""
-    blue_v_users = [u for u in users if u.get("verification") == "蓝V"]
+def _preprocess_douyin_users(users: list[dict], brand: str) -> list[dict] | None:
+    """抖音预处理：先匹配品牌名 → 过滤蓝V → 按粉丝数降序 → 取前3 → 精简字段 → URL脱敏"""
+    brand_users = [u for u in users if brand in u.get("name", "")]
+    blue_v_users = [u for u in brand_users if u.get("verification") == "蓝V"]
+    if not blue_v_users:
+        return None
 
     def sort_key(u: dict):
         fc = _parse_follower_count(u.get("follower_count"))
@@ -46,6 +49,7 @@ def _preprocess_douyin_users(users: list[dict]) -> list[dict]:
         if "?" in url:
             url = url.split("?")[0]
         result.append({
+            "platform": "douyin",
             "name": u.get("name", ""),
             "profile_url": url,
             "douyin_id": u.get("douyin_id", ""),
@@ -53,9 +57,11 @@ def _preprocess_douyin_users(users: list[dict]) -> list[dict]:
     return result
 
 
-def _preprocess_xhs_users(users: list[dict]) -> list[dict]:
+def _preprocess_xhs_users(users: list[dict]) -> list[dict] | None:
     """小红书预处理：过滤企业认证 → 按粉丝数降序 → 取前3 → 精简字段 → URL脱敏"""
     verified_users = [u for u in users if u.get("verification") == "企业认证"]
+    if not verified_users:
+        return None
 
     def sort_key(u: dict):
         fc = _parse_follower_count(u.get("follower_count"))
@@ -70,6 +76,7 @@ def _preprocess_xhs_users(users: list[dict]) -> list[dict]:
         if "?" in url:
             url = url.split("?")[0]
         result.append({
+            "platform": "xiaohongshu",
             "name": u.get("name", ""),
             "profile_url": url,
             "xhs_id": u.get("xhs_id", ""),
@@ -79,6 +86,9 @@ def _preprocess_xhs_users(users: list[dict]) -> list[dict]:
 
 # 全局预处理结果缓存（平台名 → 预处理后用户列表）
 preprocessed_cache: dict[str, list[dict] | None] = {}
+
+# 全局记录最近一次搜索关键词
+_last_keyword: str = ""
 
 
 def _preprocess_jd_users(users: list[dict], brand: str) -> dict | None:
@@ -128,6 +138,8 @@ async def search_platforms_async(keyword: str, platform_keys: list[str]) -> list
 
     若需要真正并发，可改为每个平台使用独立的 BrowserManager 实例。
     """
+    global _last_keyword
+    _last_keyword = keyword
     results: list[SearchResult] = []
 
     for key in platform_keys:
@@ -146,7 +158,7 @@ async def search_platforms_async(keyword: str, platform_keys: list[str]) -> list
         try:
             result = await platform.search(keyword)
             if key == "douyin" and not result.get("error") and result.get("users"):
-                preprocessed_cache["douyin"] = _preprocess_douyin_users(result["users"])
+                preprocessed_cache["douyin"] = _preprocess_douyin_users(result["users"], keyword)
             elif key == "xiaohongshu" and not result.get("error") and result.get("users"):
                 preprocessed_cache["xiaohongshu"] = _preprocess_xhs_users(result["users"])
             elif key == "jd" and not result.get("error") and result.get("users"):

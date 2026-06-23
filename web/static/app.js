@@ -365,78 +365,89 @@ async function startBrandAnalysis() {
     try {
         const res = await fetch("/api/analyze_brand");
         const data = await res.json();
-        if (Object.keys(data).length === 0) {
+        if (!data.results || data.results.length === 0) {
             resultEl.innerHTML = '<p style="color:var(--text-secondary)">暂无分析结果，请先进行搜索。</p>';
             return;
         }
         let html = "";
-
-        if (data.baidu) {
-            html += `
-                <h3>🔍 品牌匹配分析（百度）</h3>
-                <table style="width:100%; border-collapse:collapse;">
-                    <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">平台</th><th style="padding:8px;">匹配得分</th><th style="padding:8px;">认证等级</th></tr></thead>
-                    <tbody><tr><td>${data.baidu.platform || "baidu"}</td><td>${data.baidu.score ?? "-"}</td><td>${data.baidu.assessment_grade || "-"}</td></tr></tbody>
-                </table>`;
+        if (data.brand) {
+            html += `<p style="margin-bottom:16px;color:var(--text-secondary);">品牌: <strong>${data.brand}</strong> &nbsp; Task ID: ${data.task_id}</p>`;
         }
 
-        if (data.douyin && data.douyin.blue_v_users && data.douyin.blue_v_users.length > 0) {
-            html += `<h3 style="margin-top:24px;">🔍 抖音蓝V账号（粉丝排名前3）</h3>`;
-            html += `<table style="width:100%; border-collapse:collapse;">
-                <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">#</th><th style="padding:8px;">名称</th><th style="padding:8px;">抖音号</th><th style="padding:8px;">主页链接</th></tr></thead>
-                <tbody>`;
-            data.douyin.blue_v_users.forEach((u, i) => {
-                html += `<tr>
-                    <td style="padding:8px;">${i + 1}</td>
-                    <td style="padding:8px;">${u.name || "-"}</td>
-                    <td style="padding:8px;">${u.douyin_id || "-"}</td>
-                    <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" target="_blank">${u.profile_url}</a>` : "-"}</td>
-                </tr>`;
-            });
-            html += `</tbody></table>`;
-        }
+        for (const r of data.results) {
+            const p = r.platform;
 
-        if (data.xiaohongshu && data.xiaohongshu.enterprise_users && data.xiaohongshu.enterprise_users.length > 0) {
-            html += `<h3 style="margin-top:24px;">🔍 小红书企业认证账号（粉丝排名前3）</h3>`;
-            html += `<table style="width:100%; border-collapse:collapse;">
-                <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">#</th><th style="padding:8px;">名称</th><th style="padding:8px;">小红书号</th><th style="padding:8px;">主页链接</th></tr></thead>
-                <tbody>`;
-            data.xiaohongshu.enterprise_users.forEach((u, i) => {
-                html += `<tr>
-                    <td style="padding:8px;">${i + 1}</td>
-                    <td style="padding:8px;">${u.name || "-"}</td>
-                    <td style="padding:8px;">${u.xhs_id || "-"}</td>
-                    <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" target="_blank">${u.profile_url}</a>` : "-"}</td>
-                </tr>`;
-            });
-            html += `</tbody></table>`;
-        }
-
-        if (data.jd) {
-            html += `<h3 style="margin-top:24px;">🔍 京东官方旗舰店</h3>`;
-            if (data.jd.name) {
+            if (p === "douyin" && r.users && r.users.length > 0) {
+                html += `<h3 style="margin-top:24px;">🔍 抖音蓝V账号（粉丝排名前3）</h3>`;
                 html += `<table style="width:100%; border-collapse:collapse;">
-                    <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">店铺名称</th><th style="padding:8px;">店铺链接</th></tr></thead>
-                    <tbody><tr>
-                        <td style="padding:8px;">${data.jd.name}</td>
-                        <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${data.jd.profile_url ? `<a href="${data.jd.profile_url}" target="_blank">${data.jd.profile_url}</a>` : "-"}</td>
-                    </tr></tbody></table>`;
-            } else {
+                    <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">#</th><th style="padding:8px;">名称</th><th style="padding:8px;">抖音号</th><th style="padding:8px;">主页链接</th></tr></thead>
+                    <tbody>`;
+                r.users.forEach((u, i) => {
+                    html += `<tr>
+                        <td style="padding:8px;">${i + 1}</td>
+                        <td style="padding:8px;">${u.name || "-"}</td>
+                        <td style="padding:8px;">${u.douyin_id || "-"}</td>
+                        <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" target="_blank">${u.profile_url}</a>` : "-"}</td>
+                    </tr>`;
+                });
+                html += `</tbody></table>`;
+            } else if (p === "douyin") {
+                html += `<h3 style="margin-top:24px;">🔍 抖音蓝V账号（粉丝排名前3）</h3>`;
                 html += `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`;
             }
-        }
 
-        if (data.taobao) {
-            html += `<h3 style="margin-top:24px;">🔍 淘宝官方旗舰店</h3>`;
-            if (data.taobao.name) {
+            if (p === "xiaohongshu" && r.users && r.users.length > 0) {
+                html += `<h3 style="margin-top:24px;">🔍 小红书企业认证账号（粉丝排名前3）</h3>`;
                 html += `<table style="width:100%; border-collapse:collapse;">
-                    <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">店铺名称</th><th style="padding:8px;">店铺链接</th></tr></thead>
-                    <tbody><tr>
-                        <td style="padding:8px;">${data.taobao.name}</td>
-                        <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${data.taobao.profile_url ? `<a href="${data.taobao.profile_url}" target="_blank">${data.taobao.profile_url}</a>` : "-"}</td>
-                    </tr></tbody></table>`;
-            } else {
+                    <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">#</th><th style="padding:8px;">名称</th><th style="padding:8px;">小红书号</th><th style="padding:8px;">主页链接</th></tr></thead>
+                    <tbody>`;
+                r.users.forEach((u, i) => {
+                    html += `<tr>
+                        <td style="padding:8px;">${i + 1}</td>
+                        <td style="padding:8px;">${u.name || "-"}</td>
+                        <td style="padding:8px;">${u.xhs_id || "-"}</td>
+                        <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" target="_blank">${u.profile_url}</a>` : "-"}</td>
+                    </tr>`;
+                });
+                html += `</tbody></table>`;
+            } else if (p === "xiaohongshu") {
+                html += `<h3 style="margin-top:24px;">🔍 小红书企业认证账号（粉丝排名前3）</h3>`;
                 html += `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`;
+            }
+
+            if (p === "baidu") {
+                html += `<h3 style="margin-top:24px;">🔍 品牌匹配分析（百度）</h3>`;
+                html += `<table style="width:100%; border-collapse:collapse;">
+                    <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">平台</th><th style="padding:8px;">匹配得分</th><th style="padding:8px;">评价</th></tr></thead>
+                    <tbody><tr><td>${r.platform}</td><td>${r.score ?? "-"}</td><td>${r.assessment_grade || "-"}</td></tr></tbody></table>`;
+            }
+
+            if (p === "jd") {
+                html += `<h3 style="margin-top:24px;">🔍 京东官方旗舰店</h3>`;
+                if (r.name) {
+                    html += `<table style="width:100%; border-collapse:collapse;">
+                        <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">店铺名称</th><th style="padding:8px;">店铺链接</th></tr></thead>
+                        <tbody><tr>
+                            <td style="padding:8px;">${r.name}</td>
+                            <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.profile_url ? `<a href="${r.profile_url}" target="_blank">${r.profile_url}</a>` : "-"}</td>
+                        </tr></tbody></table>`;
+                } else {
+                    html += `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`;
+                }
+            }
+
+            if (p === "taobao") {
+                html += `<h3 style="margin-top:24px;">🔍 淘宝官方旗舰店</h3>`;
+                if (r.name) {
+                    html += `<table style="width:100%; border-collapse:collapse;">
+                        <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">店铺名称</th><th style="padding:8px;">店铺链接</th></tr></thead>
+                        <tbody><tr>
+                            <td style="padding:8px;">${r.name}</td>
+                            <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.profile_url ? `<a href="${r.profile_url}" target="_blank">${r.profile_url}</a>` : "-"}</td>
+                        </tr></tbody></table>`;
+                } else {
+                    html += `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`;
+                }
             }
         }
 

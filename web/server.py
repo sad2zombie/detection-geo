@@ -239,26 +239,78 @@ async def api_analyze(request: Request):
 # ---------- API: 品牌匹配分析 ----------
 @app.get("/api/analyze_brand")
 async def api_get_analysis():
-    """查询已暂存的分析结果，返回有数据的平台"""
-    from core.search_engine import preprocessed_cache
-    result = {}
-    if "baidu" in analysis_cache:
-        result["baidu"] = analysis_cache["baidu"]
+    """查询已暂存的分析结果，返回统一结构"""
+    from core.search_engine import preprocessed_cache, _last_keyword
+    import uuid
+
+    task_id = str(uuid.uuid4())[:8]
+    brand = _last_keyword
+    results: list = []
+    errors: list = []
+
+    # 抖音
     if "douyin" in preprocessed_cache:
-        result["douyin"] = {
+        dy_data = preprocessed_cache["douyin"]
+        results.append({
             "platform": "douyin",
-            "blue_v_users": preprocessed_cache["douyin"],
-        }
+            "users": dy_data if dy_data else [],
+        })
+
+    # 小红书
     if "xiaohongshu" in preprocessed_cache:
-        result["xiaohongshu"] = {
+        xhs_data = preprocessed_cache["xiaohongshu"]
+        results.append({
             "platform": "xiaohongshu",
-            "enterprise_users": preprocessed_cache["xiaohongshu"],
-        }
-    if "jd" in preprocessed_cache:
-        result["jd"] = preprocessed_cache["jd"]
+            "users": xhs_data if xhs_data else [],
+        })
+
+    # 百度
+    if "baidu" in analysis_cache:
+        results.append({
+            "platform": "baidu",
+            "score": analysis_cache["baidu"].get("score", ""),
+            "assessment_grade": analysis_cache["baidu"].get("assessment_grade", ""),
+        })
+
+    # 淘宝
     if "taobao" in preprocessed_cache:
-        result["taobao"] = preprocessed_cache["taobao"]
-    return JSONResponse(result)
+        tb_data = preprocessed_cache["taobao"]
+        if tb_data:
+            results.append({
+                "platform": "taobao",
+                "name": tb_data.get("name", ""),
+                "profile_url": tb_data.get("profile_url", ""),
+            })
+        else:
+            results.append({
+                "platform": "taobao",
+                "name": "",
+                "profile_url": "",
+            })
+
+    # 京东
+    if "jd" in preprocessed_cache:
+        jd_data = preprocessed_cache["jd"]
+        if jd_data:
+            results.append({
+                "platform": "jd",
+                "name": jd_data.get("name", ""),
+                "profile_url": jd_data.get("profile_url", ""),
+            })
+        else:
+            results.append({
+                "platform": "jd",
+                "name": "",
+                "profile_url": "",
+            })
+
+    return JSONResponse({
+        "task_id": task_id,
+        "brand": brand,
+        "status": "completed",
+        "results": results,
+        "errors": errors,
+    })
 
 
 # ---------- API: 报告列表 ----------

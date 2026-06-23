@@ -78,7 +78,33 @@ def _preprocess_xhs_users(users: list[dict]) -> list[dict]:
 
 
 # 全局预处理结果缓存（平台名 → 预处理后用户列表）
-preprocessed_cache: dict[str, list[dict]] = {}
+preprocessed_cache: dict[str, list[dict] | None] = {}
+
+
+def _preprocess_jd_users(users: list[dict], brand: str) -> dict | None:
+    """京东预处理：先匹配品牌名，再匹配"官方旗舰店"，取第一个匹配"""
+    brand_users = [u for u in users if brand in u.get("name", "")]
+    official = [u for u in brand_users if "官方旗舰店" in u.get("name", "")]
+    if not official:
+        return None
+    u = official[0]
+    url = u.get("profile_url", "")
+    if "?" in url:
+        url = url.split("?")[0]
+    return {"platform": "jd", "name": u.get("name", ""), "profile_url": url}
+
+
+def _preprocess_taobao_users(users: list[dict], brand: str) -> dict | None:
+    """淘宝预处理：先匹配品牌名，再匹配"官方旗舰店"，取第一个匹配"""
+    brand_users = [u for u in users if brand in u.get("name", "")]
+    official = [u for u in brand_users if "官方旗舰店" in u.get("name", "")]
+    if not official:
+        return None
+    u = official[0]
+    url = u.get("profile_url", "")
+    if "?" in url:
+        url = url.split("?")[0]
+    return {"platform": "taobao", "name": u.get("name", ""), "profile_url": url}
 
 
 def _save_result(platform_key: str, brand: str, result: dict) -> str:
@@ -123,6 +149,10 @@ async def search_platforms_async(keyword: str, platform_keys: list[str]) -> list
                 preprocessed_cache["douyin"] = _preprocess_douyin_users(result["users"])
             elif key == "xiaohongshu" and not result.get("error") and result.get("users"):
                 preprocessed_cache["xiaohongshu"] = _preprocess_xhs_users(result["users"])
+            elif key == "jd" and not result.get("error") and result.get("users"):
+                preprocessed_cache["jd"] = _preprocess_jd_users(result["users"], keyword)
+            elif key == "taobao" and not result.get("error") and result.get("users"):
+                preprocessed_cache["taobao"] = _preprocess_taobao_users(result["users"], keyword)
             filepath = _save_result(key, keyword, result)
             result["saved_to"] = filepath
             results.append(result)

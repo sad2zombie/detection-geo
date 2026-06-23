@@ -254,6 +254,10 @@ async def api_get_analysis():
             "platform": "xiaohongshu",
             "enterprise_users": preprocessed_cache["xiaohongshu"],
         }
+    if "jd" in preprocessed_cache:
+        result["jd"] = preprocessed_cache["jd"]
+    if "taobao" in preprocessed_cache:
+        result["taobao"] = preprocessed_cache["taobao"]
     return JSONResponse(result)
 
 

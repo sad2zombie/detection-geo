@@ -412,6 +412,34 @@ async function startBrandAnalysis() {
             html += `</tbody></table>`;
         }
 
+        if (data.jd) {
+            html += `<h3 style="margin-top:24px;">🔍 京东官方旗舰店</h3>`;
+            if (data.jd.name) {
+                html += `<table style="width:100%; border-collapse:collapse;">
+                    <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">店铺名称</th><th style="padding:8px;">店铺链接</th></tr></thead>
+                    <tbody><tr>
+                        <td style="padding:8px;">${data.jd.name}</td>
+                        <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${data.jd.profile_url ? `<a href="${data.jd.profile_url}" target="_blank">${data.jd.profile_url}</a>` : "-"}</td>
+                    </tr></tbody></table>`;
+            } else {
+                html += `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`;
+            }
+        }
+
+        if (data.taobao) {
+            html += `<h3 style="margin-top:24px;">🔍 淘宝官方旗舰店</h3>`;
+            if (data.taobao.name) {
+                html += `<table style="width:100%; border-collapse:collapse;">
+                    <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">店铺名称</th><th style="padding:8px;">店铺链接</th></tr></thead>
+                    <tbody><tr>
+                        <td style="padding:8px;">${data.taobao.name}</td>
+                        <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${data.taobao.profile_url ? `<a href="${data.taobao.profile_url}" target="_blank">${data.taobao.profile_url}</a>` : "-"}</td>
+                    </tr></tbody></table>`;
+            } else {
+                html += `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`;
+            }
+        }
+
         resultEl.innerHTML = html;
     } catch (e) {
         resultEl.innerHTML = `<p style="color:#e74c3c;">加载失败: ${e.message}</p>`;

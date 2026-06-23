@@ -353,19 +353,10 @@ function toggleHiddenUsers(platformKey, btn) {
 }
 
 function getVerifyLabel(verification, verifyType) {
-    const labels = {
-        "blue_v": "蓝V",
-        "yellow_v": "黄V",
-        "official": "官方",
-        "verified": "已认证",
-        "none": "无认证",
-    };
-    // taobao 的 verify_type 独立判断，不走 verification 映射
     if (verifyType) {
         return verifyType;
     }
-    const base = labels[verification] || "未知";
-    return base;
+    return verification || "未知";
 }
 
 // ---- AI 分析 ----

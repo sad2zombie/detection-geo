@@ -9,6 +9,8 @@ from config import JD_PROFILE
 from platforms.base import BasePlatform, SearchResult, UserResult
 from core.browser_manager import get_browser_manager
 
+MAX_SHOPS = 30
+
 
 class JdPlatform(BasePlatform):
     platform_key = "jd"
@@ -251,7 +253,7 @@ class JdPlatform(BasePlatform):
                     seen.add(shopUrl);
 
                     // 认证类型判断（从店铺名称判断）
-                    let verify_type = '';
+                    let verify_type = '未认证';
                     if (shopName.includes('自营')) {
                         verify_type = '京东自营';
                     } else if (shopName.includes('官方旗舰店')) {
@@ -330,17 +332,17 @@ class JdPlatform(BasePlatform):
                     if url and url not in seen_urls:
                         seen_urls.add(url)
                         all_shops.append(shop)
-                        if len(all_shops) >= 20:
+                        if len(all_shops) >= MAX_SHOPS:
                             break
 
-                if len(all_shops) >= 20:
-                    print(f"    [京东搜索] 已累计 20 个店铺，停止翻页", flush=True)
+                if len(all_shops) >= MAX_SHOPS:
+                    print(f"    [京东搜索] 已累计 {MAX_SHOPS} 个店铺，停止翻页", flush=True)
                     break
 
             shops_data = all_shops
             print(f"    [京东搜索] 累计提取到 {len(shops_data)} 个店铺", flush=True)
 
-            for idx, shop in enumerate(shops_data[:30]):
+            for idx, shop in enumerate(shops_data[:MAX_SHOPS]):
                 print(f"    [京东搜索] 店铺 {idx + 1}: {shop.get('name', '')} | 认证：{shop.get('verify_type', '')}", flush=True)
 
             return {
@@ -349,7 +351,7 @@ class JdPlatform(BasePlatform):
                 "platform_name": "京东",
                 "search_url": search_url,
                 "total_found": len(shops_data),
-                "users": shops_data[:30],
+                "users": shops_data[:MAX_SHOPS],
                 "error": "",
             }
 

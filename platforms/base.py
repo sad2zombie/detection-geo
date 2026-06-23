@@ -9,7 +9,7 @@ class UserResult(TypedDict, total=False):
     """统一的用户搜索结果结构"""
     name: str
     profile_url: str
-    verification: str          # blue_v / yellow_v / official / verified / none / unknown
+    verification: str          # 认证状态文字，如 "蓝V"、"未认证"
     verify_type: str           # 认证类型文字，如 "店铺账号"
     douyin_id: str             # 平台ID
     follower_count: str

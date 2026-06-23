@@ -466,15 +466,15 @@ class XiaohongshuPlatform(BasePlatform):
                     // #company = 蓝色圆圈勾（企业认证）
                     // #person  = 红色勾（个人认证）
                     const verifyIcon = card.querySelector('span.verify-icon svg use');
-                    let verification = 'none';
+                    let verification = '未认证';
                     let verifyType = '';
                     if (verifyIcon) {
                         const xlink = verifyIcon.getAttribute('xlink:href') || verifyIcon.getAttribute('href') || '';
                         if (xlink.includes('#company')) {
-                            verification = 'blue_v';
+                            verification = '企业认证';
                             verifyType = '企业认证';
                         } else if (xlink.includes('#person')) {
-                            verification = 'yellow_v';
+                            verification = '个人认证';
                             verifyType = '个人认证';
                         }
                     }

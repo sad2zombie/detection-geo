@@ -106,10 +106,7 @@ class BaiduPlatform(BasePlatform):
                         items.push({
                             name: title,
                             profile_url: link,
-                            verification: 'unknown',
-                            verify_type: '',
                             description: abstract,
-                            platform: 'baidu'
                         });
                     });
                     return items;

@@ -236,24 +236,9 @@ class DouyinPlatform(BasePlatform):
 
                     const fullText = card.textContent.trim();
 
-                    // 1. 认证信息（用稳定的 data-e2e 属性，不会变）
+                    // 1. 认证信息：有 badge-role-name 即为蓝V
                     const badgeEl = card.querySelector('[data-e2e="badge-role-name"]');
-                    let verification = 'none';
-                    let verifyType = '';
-                    if (badgeEl) {
-                        verifyType = badgeEl.textContent.trim();
-                        if (verifyType.includes('企业') || verifyType.includes('品牌') || verifyType.includes('店铺')) {
-                            verification = 'blue_v';
-                        } else if (verifyType.includes('个人') || verifyType.includes('达人') || verifyType.includes('音乐人') || verifyType.includes('演员') || verifyType.includes('医生')) {
-                            verification = 'yellow_v';
-                        } else if (verifyType.includes('官方') || verifyType.includes('机构') || verifyType.includes('媒体') || verifyType.includes('政府')) {
-                            verification = 'official';
-                        } else {
-                            verification = 'verified';
-                        }
-                    } else if (fullText.includes('认证徽章')) {
-                        verification = 'verified';
-                    }
+                    const verification = badgeEl ? '蓝V' : '未认证';
 
                     // 2. 核心字段：抖音号、获赞、粉丝（先提格式固定的获赞/粉丝，再反推截断抖音号）
                     let douyinId = '';
@@ -359,7 +344,6 @@ class DouyinPlatform(BasePlatform):
                             name: name,
                             profile_url: href,
                             verification: verification,
-                            verify_type: verifyType,
                             douyin_id: douyinId,
                             follower_count: followerCount,
                             like_count: likeCount,

@@ -264,9 +264,7 @@ async function startSearch() {
         searchResults = Array.isArray(data) ? data : [data];
         renderResults(searchResults);
         resultSection.style.display = "block";
-        if (searchResults.length > 0) {
-            analyzeRow.style.display = "block";
-        }
+        analyzeRow.style.display = "block";
     } catch (e) {
         progressEl.innerHTML = '<div class="progress-item error">❌ 搜索请求失败: ' + e.message + '</div>';
     }
@@ -357,6 +355,32 @@ function getVerifyLabel(verification, verifyType) {
         return verifyType;
     }
     return verification || "未知";
+}
+
+// ---- 品牌匹配分析 ----
+async function startBrandAnalysis() {
+    const resultEl = document.getElementById("brand-analysis-result");
+    resultEl.style.display = "block";
+    resultEl.innerHTML = '<span class="loading"><span class="spinner"></span>加载中...</span>';
+    try {
+        const res = await fetch("/api/analyze_brand");
+        const data = await res.json();
+        if (Object.keys(data).length === 0) {
+            resultEl.innerHTML = '<p style="color:var(--text-secondary)">暂无分析结果，请先进行百度搜索。</p>';
+            return;
+        }
+        const rows = Object.entries(data).map(([platform, info]) =>
+            `<tr><td>${info.platform || platform}</td><td>${info.score ?? "-"}</td><td>${info.assessment_grade || "-"}</td></tr>`
+        ).join("");
+        resultEl.innerHTML = `
+            <h3>🔍 品牌匹配分析</h3>
+            <table style="width:100%; border-collapse:collapse;">
+                <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">平台</th><th style="padding:8px;">匹配得分</th><th style="padding:8px;">认证等级</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    } catch (e) {
+        resultEl.innerHTML = `<p style="color:#e74c3c;">加载失败: ${e.message}</p>`;
+    }
 }
 
 // ---- AI 分析 ----

@@ -53,6 +53,31 @@ templates = Jinja2Templates(directory=str(web_dir / "templates"))
 
 auth_manager = AuthManager()
 
+# 全局分析缓存（内存中暂存各平台分析结果）
+analysis_cache: dict[str, dict] = {}
+
+
+def analyze_brand_result(brand: str, users: list[dict]) -> dict:
+    """用 brand 对 users 中的 name 做子串匹配，计算得分和等级"""
+    total = len(users)
+    matched = sum(1 for u in users if brand in u.get("name", ""))
+    score = round(matched / total * 100) if total > 0 else 0
+
+    if score >= 90:
+        grade = "高"
+    elif score >= 75:
+        grade = "中高"
+    elif score >= 60:
+        grade = "中"
+    else:
+        grade = "低"
+
+    return {
+        "platform": "baidu",
+        "score": score,
+        "assessment_grade": grade,
+    }
+
 
 # ---------- 页面路由 ----------
 @app.get("/", response_class=HTMLResponse)
@@ -124,6 +149,13 @@ async def api_search(request: Request, body: dict):
 
     from core.search_engine import search_platforms_async
     results = await search_platforms_async(keyword, platform_keys)
+
+    for r in results:
+        if r.get("platform") == "baidu" and not r.get("error") and r.get("users"):
+            analysis = analyze_brand_result(r.get("brand", ""), r.get("users", []))
+            analysis_cache["baidu"] = analysis
+            print(f"[分析结果] 平台={analysis['platform']} 等级={analysis['assessment_grade']}")
+
     return JSONResponse(results)
 
 
@@ -202,6 +234,13 @@ async def api_analyze(request: Request):
             f.write(analysis["report"])
 
     return JSONResponse(analysis)
+
+
+# ---------- API: 品牌匹配分析 ----------
+@app.get("/api/analyze_brand")
+async def api_get_analysis():
+    """查询已暂存的品牌匹配分析结果"""
+    return JSONResponse(analysis_cache)
 
 
 # ---------- API: 报告列表 ----------

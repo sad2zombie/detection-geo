@@ -21,21 +21,30 @@ class DouyinPlatform(BasePlatform):
         self._page: Any = None
 
     async def _ensure_browser(self, headless: bool | None = None) -> None:
-        """确保浏览器已启动且可用
+        """确保浏览器已启动且可用。
 
-        Args:
-            headless: 是否无头。None 沿用默认；登录场景传 False 让用户能看见浏览器。
+        可靠性检查：用 try/await 实际验证 context 是否可用，
+        而非依赖同步的 is_alive()（只能检查标志位）。
         """
-        if self._ctx is not None and not self._bm.is_alive():
-            self._ctx = None
-            self._page = None
+        # 实际验证 browser 是否还活着
+        browser_ok = False
+        if self._ctx is not None:
             try:
-                await self._bm.shutdown()
+                _ = self._ctx.pages
+                browser_ok = True
             except Exception:
-                pass
+                browser_ok = False
 
-        if self._ctx is None or not self._bm.is_alive() or (headless is not None and headless != self._bm._headless):
-            self._ctx, self._page = await self._bm.ensure_page(str(DOUYIN_PROFILE), headless=headless)
+        need_relaunch = (
+            self._ctx is None
+            or not browser_ok
+            or (headless is not None and self._bm._headless != headless)
+        )
+
+        if need_relaunch:
+            self._ctx, self._page = await self._bm.ensure_page(
+                str(DOUYIN_PROFILE), headless=headless
+            )
         elif self._page is None:
             if not self._ctx.pages:
                 self._page = await self._ctx.new_page()
@@ -54,8 +63,6 @@ class DouyinPlatform(BasePlatform):
             await self._bm.shutdown()
         except Exception:
             pass
-        self._bm._closed = False
-        self._bm._ctx = None
 
     async def check_login_status(self) -> dict:
         """检查抖音是否已登录（轻量检测）"""
@@ -137,7 +144,7 @@ class DouyinPlatform(BasePlatform):
         return bool(self.profile_dir) and Path(self.profile_dir).exists()
 
     async def _goto_with_retry(self, url: str, retries: int = 2, timeout: int = 30000) -> bool:
-        """带重试的导航"""
+        """带重试的导航：失败时只创建新 page，不关闭整个浏览器，避免破坏全局状态"""
         for attempt in range(retries + 1):
             try:
                 await self._page.goto(url, wait_until="domcontentloaded", timeout=timeout)
@@ -146,16 +153,18 @@ class DouyinPlatform(BasePlatform):
                 err_str = str(goto_err)
                 print(f"    [导航] 第 {attempt + 1} 次失败 ({url[:60]}...): {err_str[:120]}", flush=True)
                 if attempt < retries:
-                    self._ctx = None
-                    self._page = None
-                    try:
+                    page_ok = False
+                    if self._ctx is not None and self._bm.is_alive():
+                        try:
+                            _ = self._ctx.pages
+                            self._page = await self._ctx.new_page()
+                            page_ok = True
+                        except Exception:
+                            page_ok = False
+                    if not page_ok:
                         await self._bm.shutdown()
-                    except Exception:
-                        pass
-                    self._bm._closed = False
-                    self._bm._ctx = None
-                    await self._ensure_browser()
-                    print(f"    [导航] 重置浏览器完成，准备重试…", flush=True)
+                        await self._ensure_browser()
+                    print(f"    [导航] 新建 page 完成，准备重试…", flush=True)
                 else:
                     print(f"    [导航] 重试耗尽，放弃", flush=True)
                     return False
@@ -163,6 +172,47 @@ class DouyinPlatform(BasePlatform):
 
     # ---------- 搜索（核心修复：不依赖动态类名，文本特征+字段互验）----------
     async def search(self, keyword: str) -> SearchResult:
+        """搜索入口：结果为空则最多重试3次"""
+        for attempt in range(3):
+            try:
+                result = await self._do_search(keyword)
+            except Exception as e:
+                # 内核抛异常视为失败，进入重试
+                result = {
+                    "brand": keyword,
+                    "platform": "douyin",
+                    "platform_name": "抖音",
+                    "search_url": "",
+                    "total_found": 0,
+                    "users": [],
+                    "error": str(e),
+                }
+            if result.get("total_found", 0) > 0:
+                if attempt > 0:
+                    print(f"    [抖音搜索] 第 {attempt + 1} 次尝试成功，获得 {result.get('total_found', 0)} 条数据", flush=True)
+                return result
+            # 结果为空
+            print(f"    [抖音搜索] 第 {attempt + 1} 次结果为空（{result.get('error', '未知')[:60]}），", flush=True, end="")
+            if attempt < 2:
+                print("重试…", flush=True)
+                try:
+                    await self._bm.shutdown()
+                except Exception:
+                    pass
+                await self._ensure_browser(headless=False)
+            else:
+                print("重试耗尽，返回空结果", flush=True)
+        return {
+            "brand": keyword,
+            "platform": "douyin",
+            "platform_name": "抖音",
+            "search_url": "",
+            "total_found": 0,
+            "users": [],
+            "error": "重试3次后仍无结果",
+        }
+
+    async def _do_search(self, keyword: str) -> SearchResult:
         await self._ensure_browser(headless=False)
         search_url = f"https://www.douyin.com/search/{quote(keyword)}?type=user"
 

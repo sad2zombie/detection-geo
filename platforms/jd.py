@@ -23,16 +23,25 @@ class JdPlatform(BasePlatform):
         self._page: Any = None
 
     async def _ensure_browser(self, headless: bool | None = None) -> None:
-        if self._ctx is not None and not self._bm.is_alive():
-            self._ctx = None
-            self._page = None
+        """确保浏览器已启动且可用"""
+        browser_ok = False
+        if self._ctx is not None:
             try:
-                await self._bm.shutdown()
+                _ = self._ctx.pages
+                browser_ok = True
             except Exception:
-                pass
+                browser_ok = False
 
-        if self._ctx is None or not self._bm.is_alive() or (headless is not None and headless != self._bm._headless):
-            self._ctx, self._page = await self._bm.ensure_page(str(JD_PROFILE), headless=headless)
+        need_relaunch = (
+            self._ctx is None
+            or not browser_ok
+            or (headless is not None and self._bm._headless != headless)
+        )
+
+        if need_relaunch:
+            self._ctx, self._page = await self._bm.ensure_page(
+                str(JD_PROFILE), headless=headless
+            )
         elif self._page is None:
             if not self._ctx.pages:
                 self._page = await self._ctx.new_page()
@@ -50,8 +59,6 @@ class JdPlatform(BasePlatform):
             await self._bm.shutdown()
         except Exception:
             pass
-        self._bm._closed = False
-        self._bm._ctx = None
 
     async def _inject_save_button(self) -> None:
         await self._page.evaluate("""() => {
@@ -114,7 +121,7 @@ class JdPlatform(BasePlatform):
                 await self.close()
                 return False
             try:
-                saved = await self._page.evaluate("() => window.__cloak_saved || false", timeout=3000)
+                saved = await self._page.evaluate("() => window.__cloak_saved || false")
                 if saved:
                     await asyncio.sleep(1)
                     print("    [京东登录] Cookie已保存！关闭浏览器…", flush=True)
@@ -146,22 +153,63 @@ class JdPlatform(BasePlatform):
                 err_str = str(goto_err)
                 print(f"    [京东导航] 第 {attempt + 1} 次失败 ({url[:60]}...): {err_str[:120]}", flush=True)
                 if attempt < retries:
-                    self._ctx = None
-                    self._page = None
-                    try:
+                    page_ok = False
+                    if self._ctx is not None and self._bm.is_alive():
+                        try:
+                            _ = self._ctx.pages
+                            self._page = await self._ctx.new_page()
+                            page_ok = True
+                        except Exception:
+                            page_ok = False
+                    if not page_ok:
                         await self._bm.shutdown()
-                    except Exception:
-                        pass
-                    self._bm._closed = False
-                    self._bm._ctx = None
-                    await self._ensure_browser()
-                    print(f"    [京东导航] 重置浏览器完成，准备重试…", flush=True)
+                        await self._ensure_browser()
+                    print(f"    [京东导航] 新建 page 完成，准备重试…", flush=True)
                 else:
                     print(f"    [京东导航] 重试耗尽，放弃", flush=True)
                     return False
         return False
 
     async def search(self, keyword: str) -> SearchResult:
+        """搜索入口：结果为空则最多重试3次"""
+        for attempt in range(3):
+            try:
+                result = await self._do_search(keyword)
+            except Exception as e:
+                result = {
+                    "brand": keyword,
+                    "platform": "jd",
+                    "platform_name": "京东",
+                    "search_url": "",
+                    "total_found": 0,
+                    "users": [],
+                    "error": str(e),
+                }
+            if result.get("total_found", 0) > 0:
+                if attempt > 0:
+                    print(f"    [京东搜索] 第 {attempt + 1} 次尝试成功，获得 {result.get('total_found', 0)} 条数据", flush=True)
+                return result
+            print(f"    [京东搜索] 第 {attempt + 1} 次结果为空（{result.get('error', '未知')[:60]}），", flush=True, end="")
+            if attempt < 2:
+                print("重试…", flush=True)
+                try:
+                    await self._bm.shutdown()
+                except Exception:
+                    pass
+                await self._ensure_browser(headless=False)
+            else:
+                print("重试耗尽，返回空结果", flush=True)
+        return {
+            "brand": keyword,
+            "platform": "jd",
+            "platform_name": "京东",
+            "search_url": "",
+            "total_found": 0,
+            "users": [],
+            "error": "重试3次后仍无结果",
+        }
+
+    async def _do_search(self, keyword: str) -> SearchResult:
         await self._ensure_browser(headless=False)
         search_url = f"https://search.jd.com/Search?enc=utf-8&keyword={quote(keyword)}&shop=1"
 

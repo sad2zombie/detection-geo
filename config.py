@@ -8,10 +8,11 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 
 # ----- CloakBrowser 路径配置 -----
-# cloakbrowser 已通过 pip install 安装，以下路径仅作备用（当 env var CLOAKBROWSER_DIR 设置时优先使用环境变量）。
-# 正常情况下 config.py 所在项目无需修改此路径。
-CLOAKBROWSER_DIR = Path(os.environ.get("CLOAKBROWSER_DIR",
-    r"C:\Users\Administrator\PycharmProjects\CloakBrowser-main"))
+# 优先从环境变量 CLOAKBROWSER_DIR 读取；未设置时默认找项目根目录下的 cloakbrowser/ 子目录
+CLOAKBROWSER_DIR = Path(os.environ.get(
+    "CLOAKBROWSER_DIR",
+    ROOT_DIR / "cloakbrowser"
+))
 
 # ----- 数据目录 -----
 DATA_DIR = ROOT_DIR / "data"
@@ -85,7 +86,4 @@ else:
 BROWSER_LAUNCH_TIMEOUT = 30
 # BROWSER_IDLE_TIMEOUT: 浏览器空闲超时（秒），无任务时自动关闭
 BROWSER_IDLE_TIMEOUT = 300
-# BROWSER_LAUNCH_RETRIES: 启动失败时自动重试次数（清理锁文件后重试）
 BROWSER_LAUNCH_RETRIES = 1
-
-BAILIAN_API_KEY = "sk-e87fc55a6d7343fa9bfd83d8be1724be"

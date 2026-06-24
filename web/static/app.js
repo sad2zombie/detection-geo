@@ -1,6 +1,15 @@
 // ---- 初始化 ----
 let searchResults = [];
 
+// ---- 统一 API 入口（Electron 走 IPC 转发，浏览器直连 fallback） ----
+async function api(url, options = {}) {
+    if (window.electronAPI && window.electronAPI.apiFetch) {
+        return window.electronAPI.apiFetch(url, options);
+    }
+    const res = await fetch(url, options);
+    return { ok: res.ok, status: res.status, data: await res.json() };
+}
+
 // ---- 平台选择栏 ----
 const PLATFORM_META = [
     { key: "douyin",      name: "抖音",   icon: "🎵" },
@@ -46,7 +55,7 @@ function getSelectedPlatforms() {
     return Array.from(document.querySelectorAll(".platform-cb:checked")).map(cb => cb.value);
 }
 
-// Toast提示
+// ---- Toast提示 ----
 function toast(msg, type = "success") {
     const el = document.createElement("div");
     el.className = `toast ${type}`;
@@ -76,8 +85,8 @@ async function checkAuth(platformKey = null) {
         const url = platformKey
             ? `/api/auth/status/${platformKey}?${refreshParam}`
             : `/api/auth/status?${refreshParam}`;
-        const res = await fetch(url);
-        const data = await res.json();
+        const result = await api(url);
+        const data = result.data;
         const results = Array.isArray(data) ? data : [data];
 
         // 极短延迟避免 spinner 闪一下
@@ -173,9 +182,8 @@ function renderPlatformCards(platforms) {
 // 页面加载时拉一次后端状态（lifespan 启动检测已写入 _auth_status_cache，这里是"无脑读缓存"，不启浏览器）
 async function loadInitialAuthStatus() {
     try {
-        const res = await fetch("/api/auth/status");
-        const platforms = await res.json();
-        renderPlatformCards(platforms);
+        const result = await api("/api/auth/status");
+        renderPlatformCards(result.data);
     } catch (e) {
         // 后端没起来/lifespan 还没跑完：直接显示需要登录的占位
         renderPlatformCards([{ platform: "douyin", isLoggedIn: false, note: "后端未就绪" }]);
@@ -195,18 +203,11 @@ async function loginPlatform(key) {
         card.querySelector(".platform-status").innerHTML = '<span class="spinner"></span> 等待登录...';
     }
 
-    // 兜底：30 秒内后端没回也强制结束 spinner，避免用户关掉浏览器后无限转圈
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
     try {
-        const res = await fetch("/api/auth/login/" + key, { method: "POST", signal: controller.signal });
-        clearTimeout(timeoutId);
-        const data = await res.json();
+        const result = await api("/api/auth/login/" + key, { method: "POST", timeout: 30000 });
+        const data = result.data;
         const pname = data.platform_name || key;
         if (data.success) {
-            // 登录成功 → 服务端 __cloak_saved=true 时已 close() 浏览器
-            // 这里不再触发检测，直接把卡片切到"已登录"（保底零延迟）
             updatePlatformCard({
                 platform: key,
                 platform_name: pname,
@@ -214,21 +215,16 @@ async function loginPlatform(key) {
             });
             toast(`${pname} 登录成功！`);
         } else {
-            // 失败：不展示技术异常给用户。
-            // Playwright 在浏览器被关时抛 "Target page, context or browser has been closed"，
-            // 识别为"用户主动取消"，其他归为"登录未完成"。
             const errStr = (data.error || "").toLowerCase();
             const cancelled = errStr.includes("closed") || errStr.includes("cancel");
             toast(`${pname} ${cancelled ? "浏览器已关闭" : "登录未完成"}`, "warn");
-            // 浏览器已关闭：用户可能已经保存了 profile，去后端确认一下真实状态
             if (cancelled) {
                 checkAuth(key);
             }
         }
     } catch (e) {
-        clearTimeout(timeoutId);
-        const isAbort = e && e.name === "AbortError";
-        toast(`登录请求${isAbort ? "超时（30 秒）" : "失败"}: ${isAbort ? "请刷新页面查看实际状态" : e.message}`, "error");
+        const isTimeout = e && e.message && e.message.includes("timeout");
+        toast(`登录请求${isTimeout ? "超时（30 秒）" : "失败"}: ${isTimeout ? "请刷新页面查看实际状态" : e.message}`, "error");
         checkAuth(key);
     }
 }
@@ -253,12 +249,12 @@ async function startSearch() {
     try {
         const selectedPlatforms = getSelectedPlatforms();
         if (!selectedPlatforms.length) { toast("请至少选择一个平台", "error"); return; }
-        const res = await fetch("/api/search", {
+        const result = await api("/api/search", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ keyword: keyword, platforms: selectedPlatforms }),
         });
-        const data = await res.json();
+        const data = result.data;
 
         progressEl.style.display = "none";
         searchResults = Array.isArray(data) ? data : [data];
@@ -363,8 +359,8 @@ async function startBrandAnalysis() {
     resultEl.style.display = "block";
     resultEl.innerHTML = '<span class="loading"><span class="spinner"></span>加载中...</span>';
     try {
-        const res = await fetch("/api/analyze_brand");
-        const data = await res.json();
+        const result = await api("/api/analyze_brand");
+        const data = result.data;
         if (!data.results || data.results.length === 0) {
             resultEl.innerHTML = '<p style="color:var(--text-secondary)">暂无分析结果，请先进行搜索。</p>';
             return;
@@ -471,12 +467,12 @@ async function startAnalysis() {
     reportSection.style.display = "none";
 
     try {
-        const res = await fetch("/api/analyze", {
+        const result = await api("/api/analyze", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ brand: keyword, results: searchResults }),
         });
-        const data = await res.json();
+        const data = result.data;
 
         progressEl.style.display = "none";
         reportSection.style.display = "block";

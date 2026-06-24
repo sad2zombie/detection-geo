@@ -5,6 +5,31 @@ import atexit
 import sys
 from pathlib import Path
 
+# Windows 下包装 stdout，避免 emoji 导致 gbk 编码错误
+# 中文保留，emoji 等超出 GBK 范围的字符自动丢弃
+if sys.platform == 'win32':
+    class _GBKSafeWriter:
+        def __init__(self, raw_stream):
+            self._raw = raw_stream
+
+        def write(self, text):
+            if text:
+                safe = text.encode('gbk', errors='replace')
+                self._raw.write(safe)
+                self._raw.flush()
+
+        def flush(self):
+            self._raw.flush()
+
+        def isatty(self):
+            return self._raw.isatty()
+
+        def fileno(self):
+            return self._raw.fileno()
+
+    sys.stdout = _GBKSafeWriter(sys.stdout.buffer)
+    sys.stderr = _GBKSafeWriter(sys.stderr.buffer)
+
 # 确保项目根目录在 sys.path 中
 sys.path.insert(0, str(Path(__file__).parent))
 

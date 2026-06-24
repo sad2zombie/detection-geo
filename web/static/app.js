@@ -1,5 +1,35 @@
 // ---- 初始化 ----
 let searchResults = [];
+// 跨平台登录串行化：同一时刻只能有一个平台在等待登录，其余按钮禁用并提示排队
+let loginInFlight = null;   // 当前正在登录的平台 key；null 表示空闲
+
+function setLoginButtonsState() {
+    // 登录中：所有按钮禁用；空闲：恢复
+    const cards = document.querySelectorAll(".platform-card-item");
+    cards.forEach(card => {
+        const btn = card.querySelector("button[onclick*='loginPlatform']");
+        if (!btn) return;
+        if (loginInFlight === null) {
+            btn.disabled = false;
+            btn.style.opacity = "";
+            btn.style.cursor = "";
+            btn.title = "";
+        } else {
+            const cardKey = card.id.replace("platform-card-", "");
+            if (cardKey === loginInFlight) {
+                btn.disabled = false;
+                btn.style.opacity = "";
+                btn.style.cursor = "";
+                btn.title = "正在登录…";
+            } else {
+                btn.disabled = true;
+                btn.style.opacity = "0.45";
+                btn.style.cursor = "not-allowed";
+                btn.title = "其他平台正在登录，请等待其完成后再操作（登录流程串行）";
+            }
+        }
+    });
+}
 
 // ---- 统一 API 入口（Electron 走 IPC 转发，浏览器直连 fallback） ----
 async function api(url, options = {}) {
@@ -99,6 +129,8 @@ async function checkAuth(platformKey = null) {
             // 全部平台：重新渲染所有卡片
             renderPlatformCards(results);
         }
+        // 同步登录按钮串行化状态（渲染后必须重设）
+        setLoginButtonsState();
         toast(platformKey ? `${results[0]?.platform_name || platformKey} 检测完成` : "全部检测完成");
     } catch (e) {
         if (platformKey) {
@@ -141,6 +173,8 @@ function updatePlatformCard(p) {
         actions.innerHTML = `<button class="btn btn-sm btn-primary" onclick="loginPlatform('${p.platform}')">🔑 登录</button>`
             + actions.innerHTML;
     }
+    // 同步串行化按钮状态（用户当前是否在登录其他平台）
+    setLoginButtonsState();
 }
 
 function renderPlatformCards(platforms) {
@@ -177,6 +211,8 @@ function renderPlatformCards(platforms) {
     + `<div class="btn-row" style="margin-top:12px;">
         <button class="btn btn-outline" onclick="checkAuth()">🔄 检测全部平台</button>
     </div>`;
+    // 重渲染后同步串行化按钮状态
+    setLoginButtonsState();
 }
 
 // 页面加载时拉一次后端状态（lifespan 启动检测已写入 _auth_status_cache，这里是"无脑读缓存"，不启浏览器）
@@ -198,6 +234,15 @@ document.addEventListener("DOMContentLoaded", () => {
 async function loginPlatform(key) {
     const nameMap = { douyin: "抖音", baidu: "百度", xiaohongshu: "小红书", taobao: "淘宝", jd: "京东" };
     const name = nameMap[key] || key;
+    // 串行化：其他平台正在登录时直接拒绝
+    if (loginInFlight !== null && loginInFlight !== key) {
+        const busyName = nameMap[loginInFlight] || loginInFlight;
+        toast(`${busyName} 正在登录，请等待完成后再操作其他平台`, "warn");
+        return;
+    }
+    loginInFlight = key;
+    setLoginButtonsState();
+
     const card = document.getElementById("platform-card-" + key);
     if (card) {
         card.querySelector(".platform-status").innerHTML = '<span class="spinner"></span> 等待登录...';
@@ -206,6 +251,7 @@ async function loginPlatform(key) {
     try {
         const result = await api("/api/auth/login/" + key, { method: "POST", timeout: 30000 });
         const data = result.data;
+        console.log("[登录结果]", data);
         const pname = data.platform_name || key;
         if (data.success) {
             updatePlatformCard({
@@ -226,6 +272,9 @@ async function loginPlatform(key) {
         const isTimeout = e && e.message && e.message.includes("timeout");
         toast(`登录请求${isTimeout ? "超时（30 秒）" : "失败"}: ${isTimeout ? "请刷新页面查看实际状态" : e.message}`, "error");
         checkAuth(key);
+    } finally {
+        loginInFlight = null;
+        setLoginButtonsState();
     }
 }
 

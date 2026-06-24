@@ -3,50 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>品牌检测系统</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>品牌检测系统 // BRAND DETECTION SYSTEM</title>
+    <link rel="stylesheet" href="/static/style.css?v=2">
 </head>
 <body>
+    <!-- 背景层 -->
+    <div class="bg-layer bg-gradient"></div>
+    <div class="bg-layer bg-grid"></div>
+    <div class="bg-layer bg-scanlines"></div>
+
+    <!-- 顶部扫描线 -->
+    <div class="top-bar"></div>
+
+    <!-- 角落 HUD 装饰 -->
+    <div class="corner-deco tl"></div>
+    <div class="corner-deco tr"></div>
+    <div class="corner-deco bl"></div>
+    <div class="corner-deco br"></div>
+
     <div class="container">
         <header>
-            <h1>🔍 品牌认证检测系统</h1>
-            <p class="subtitle">多平台品牌搜索 · 认证状态检测</p>
+            <div class="logo-line">
+                <div class="logo-icon">&#128269;</div>
+                <h1>品牌认证检测系统</h1>
+            </div>
+            <p class="subtitle">MULTI-PLATFORM BRAND AUTH DETECTION</p>
         </header>
 
         <!-- 登录状态 -->
         <section class="card" id="auth-section">
-            <h2>📱 平台登录状态</h2>
-            <div class="platform-cards" id="auth-status">
-                <span class="loading">检测中...</span>
+            <div class="card-corner tl"></div>
+            <div class="card-corner tr"></div>
+            <div class="card-corner bl"></div>
+            <div class="card-corner br"></div>
+            <h2>&#9654; 平台登录状态</h2>
+            <div class="platform-list" id="auth-status">
+                <span class="loading"><span class="spinner"></span>INITIALIZING...</span>
             </div>
         </section>
 
         <!-- 搜索 -->
         <section class="card" id="search-section">
-            <h2>🔎 品牌搜索</h2>
+            <div class="card-corner tl"></div>
+            <div class="card-corner tr"></div>
+            <div class="card-corner bl"></div>
+            <div class="card-corner br"></div>
+            <h2>&#9654; 品牌搜索</h2>
             <div class="search-bar">
                 <input type="text" id="keyword" placeholder="输入品牌关键词，如：西屋大路灯" autofocus>
             </div>
             <div class="platform-select-bar" id="platform-select-bar"></div>
             <div class="btn-row">
-                <button class="btn btn-primary" onclick="startSearch()">🚀 搜索</button>
+                <button class="btn btn-primary" onclick="startSearch()">&#9654; 搜索</button>
             </div>
             <div id="search-progress" class="progress-area" style="display:none;"></div>
         </section>
 
         <!-- 结果 -->
         <section class="card" id="result-section" style="display:none;">
-            <h2>📊 搜索结果</h2>
+            <div class="card-corner tl"></div>
+            <div class="card-corner tr"></div>
+            <div class="card-corner bl"></div>
+            <div class="card-corner br"></div>
+            <h2>&#9654; 搜索结果</h2>
             <div id="search-results"></div>
         </section>
 
         <!-- 分析按钮 -->
         <div class="btn-row" id="analyze-row">
-            <button class="btn btn-outline" onclick="startBrandAnalysis()">🔍 品牌匹配分析</button>
+            <button class="btn btn-outline" onclick="startBrandAnalysis()">&#9670; 品牌匹配分析</button>
         </div>
 
         <!-- 分析结果 -->
-        <div id="brand-analysis-result" class="card" style="display:none; margin-top: 16px;"></div>
+        <div id="brand-analysis-result" class="card" style="display:none; margin-top: 16px;">
+            <div class="card-corner tl"></div>
+            <div class="card-corner tr"></div>
+            <div class="card-corner bl"></div>
+            <div class="card-corner br"></div>
+        </div>
     </div>
 
     <script src="/static/app.js"></script>

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, globalShortcut } = require("electron");
+const { app, BrowserWindow, ipcMain } = require("electron"); // 移除了 globalShortcut
 const path = require("path");
 const http = require("http");
 const { spawn } = require("child_process");
@@ -16,7 +16,7 @@ function createPyProc(frontendPath) {
   if (app.isPackaged) {
     scriptPath = path.join(process.resourcesPath, "backend-exe.exe");
   } else {
-    scriptPath = "python";
+    scriptPath = "C:\\Users\\pyproject_ENV\\browser\\Scripts\\python.exe";
   }
 
   const projectRoot = app.isPackaged
@@ -68,13 +68,26 @@ async function createWindow(frontendPath) {
 
   mainWindow.setMenu(null);
 
+  // ===== 改动1：只在开发环境自动打开 DevTools =====
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  }
+
+  // ===== 改动2：窗口内 F12 监听（替代 globalShortcut） =====
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12' && input.type === 'keyDown') {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault(); // 阻止系统默认行为
+      console.log('[MAIN] F12 pressed (window-internal)');
+    }
+  });
+
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
     console.log("[MAIN] Window ready to show");
   });
 
   // 等后端就绪后再加载页面，确保 origin 为 http://127.0.0.1:8000
-  // 这样 /static/ 路径由 FastAPI 的 StaticFiles 正确托管
   backendPort = await waitForBackend(60000);
   const pageUrl = `http://127.0.0.1:${backendPort}`;
   await mainWindow.loadURL(pageUrl);
@@ -193,9 +206,7 @@ app.on("ready", async () => {
   createPyProc(frontendPath);
   await createWindow(frontendPath);
 
-  globalShortcut.register("F12", () => {
-    if (mainWindow) mainWindow.webContents.toggleDevTools();
-  });
+  // ===== 移除了 globalShortcut 注册 =====
 });
 
 let isQuitting = false;
@@ -203,7 +214,8 @@ let isQuitting = false;
 app.on("before-quit", (event) => {
   if (isQuitting) return;
   isQuitting = true;
-  globalShortcut.unregisterAll();
+
+  // ===== 移除了 globalShortcut.unregisterAll() =====
 
   if (pyProc) {
     event.preventDefault();

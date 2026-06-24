@@ -78,7 +78,7 @@ class XiaohongshuPlatform(BasePlatform):
             if (document.getElementById('__cloak_save_btn')) return;
             var btn = document.createElement('div');
             btn.id = '__cloak_save_btn';
-            btn.textContent = '💾 保存登录';
+            btn.textContent = '[SAVE] Save Login';
             btn.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;'
                 + 'padding:14px 24px;background:linear-gradient(135deg,#ff6b6b,#ee5a5a);'
                 + 'color:#fff;border-radius:10px;cursor:pointer;font-size:16px;'
@@ -103,7 +103,7 @@ class XiaohongshuPlatform(BasePlatform):
         await asyncio.sleep(3)
         await self._inject_save_button()
 
-        print("    [小红书登录] 浏览器已打开，请在浏览器中用小红书APP扫码登录后点击右上角「💾 保存登录」按钮", flush=True)
+        print("    [Xiaohongshu Login] Browser opened, scan QR code with Xiaohongshu app and click [SAVE] in top-right corner", flush=True)
 
         max_wait = 600
         elapsed = 0

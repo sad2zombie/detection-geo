@@ -80,7 +80,7 @@ class DouyinPlatform(BasePlatform):
             if (document.getElementById('__cloak_save_btn')) return;
             var btn = document.createElement('div');
             btn.id = '__cloak_save_btn';
-            btn.textContent = '💾 保存登录';
+            btn.textContent = '[SAVE] Save Login';
             btn.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;'
                 + 'padding:14px 24px;background:linear-gradient(135deg,#4f8ff7,#764ba2);'
                 + 'color:#fff;border-radius:10px;cursor:pointer;font-size:16px;'
@@ -104,7 +104,7 @@ class DouyinPlatform(BasePlatform):
         await asyncio.sleep(3)
         await self._inject_save_button()
 
-        print("    [登录] 浏览器已打开，请在抖音完成登录后点击右上角「💾 保存登录」按钮", flush=True)
+        print("    [登录] Browser opened, finish login on Douyin and click [SAVE] in top-right corner", flush=True)
 
         max_wait = 600
         elapsed = 0
@@ -118,6 +118,7 @@ class DouyinPlatform(BasePlatform):
                 return False
             try:
                 saved = await self._page.evaluate("() => window.__cloak_saved || false")
+                print(f"    [登录] 第{elapsed}s: saved={saved}", flush=True)
                 if saved:
                     await asyncio.sleep(1)
                     print("    [登录] Cookie已保存！关闭浏览器…", flush=True)
@@ -125,9 +126,10 @@ class DouyinPlatform(BasePlatform):
                     return True
                 eval_fail_streak = 0
             except Exception as eval_err:
+                print(f"    [登录] evaluate失败 {eval_fail_streak + 1}: {type(eval_err).__name__}: {str(eval_err)[:80]}", flush=True)
                 eval_fail_streak += 1
                 if eval_fail_streak >= 2:
-                    print(f"    [登录] 浏览器无响应（连续失败 {eval_fail_streak} 次）: {str(eval_err)[:80]}", flush=True)
+                    print(f"    [登录] 浏览器无响应（连续失败 {eval_fail_streak} 次）", flush=True)
                     await self.close()
                     return False
                 try:

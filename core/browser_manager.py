@@ -121,7 +121,11 @@ class BrowserManager:
     """
 
     def __init__(self):
-        self._lock: Optional[asyncio.Lock] = None  # 懒创建 asyncio.Lock
+        self._lock: Optional[asyncio.Lock] = None  # 内部 _ref_count / _launch 串行化
+        # 跨平台全局互斥锁：所有公开 API 都先抢这个锁，确保同一时间只有一个平台
+        # 能启动/操作浏览器；否则抖音登录还没点保存，淘宝又进来 ensure_page 会触发
+        # _launch → _close_browser，把抖音的 page 干掉。
+        self._global_lock: Optional[asyncio.Lock] = None
         self._ref_count = 0
         self._ctx: Any = None  # CloakBrowser BrowserContext (async)
         self._last_used: float = time.time()
@@ -135,7 +139,13 @@ class BrowserManager:
             self._lock = asyncio.Lock()
         return self._lock
 
-    # ---- 公共 API（全部 async） ----
+    def _get_global_lock(self) -> asyncio.Lock:
+        """懒创建跨平台全局互斥锁。"""
+        if self._global_lock is None:
+            self._global_lock = asyncio.Lock()
+        return self._global_lock
+
+    # ---- 公共 API（全部 async）----
 
     async def acquire(self, profile_dir: str | None = None, headless: bool | None = None) -> None:
         """增加引用计数；若浏览器未启动或已死则启动新实例
@@ -145,29 +155,32 @@ class BrowserManager:
             headless: 是否无头模式。None 表示沿用当前设置（首次默认 BROWSER_HEADLESS）。
                       传入 True/False 会强制使用该模式，并在 headless 与当前不一致时重启浏览器。
         """
-        async with self._get_lock():
-            async with asyncio.timeout(BROWSER_LAUNCH_TIMEOUT + 10):
-                # headless 切换时先关闭旧实例（必须在这里更新 _headless，否则 _need_relaunch 判断会出错）
-                if headless is not None and self._ctx is not None:
-                    if headless != self._headless:
-                        await self._close_browser()
-                    self._headless = headless
-                if await self._need_relaunch(profile_dir, headless):
-                    await self._launch(profile_dir, headless)
-                else:
-                    if profile_dir is not None:
-                        self._profile_dir = profile_dir
-                self._ref_count += 1
-                self._last_used = time.time()
+        # 全局互斥锁：跨平台串行化（避免并发 ensure_page / _launch 互相干掉对方）
+        async with self._get_global_lock():
+            async with self._get_lock():
+                async with asyncio.timeout(BROWSER_LAUNCH_TIMEOUT + 10):
+                    # headless 切换时先关闭旧实例（必须在这里更新 _headless，否则 _need_relaunch 判断会出错）
+                    if headless is not None and self._ctx is not None:
+                        if headless != self._headless:
+                            await self._close_browser()
+                        self._headless = headless
+                    if await self._need_relaunch(profile_dir, headless):
+                        await self._launch(profile_dir, headless)
+                    else:
+                        if profile_dir is not None:
+                            self._profile_dir = profile_dir
+                    self._ref_count += 1
+                    self._last_used = time.time()
 
     async def release(self) -> None:
         """减少引用计数；归零时关闭浏览器"""
-        async with self._get_lock():
-            if self._ref_count <= 0:
-                return
-            self._ref_count -= 1
-            if self._ref_count <= 0:
-                await self._close_browser()
+        async with self._get_global_lock():
+            async with self._get_lock():
+                if self._ref_count <= 0:
+                    return
+                self._ref_count -= 1
+                if self._ref_count <= 0:
+                    await self._close_browser()
 
     def get_context(self) -> Any | None:
         """获取当前 BrowserContext（同步，仅供遗留代码使用）"""
@@ -190,23 +203,25 @@ class BrowserManager:
         确保有可用的 context 和 page。
         返回 (context, page)。若内部浏览器已死，自动重建。
         """
-        async with self._get_lock():
-            async with asyncio.timeout(BROWSER_LAUNCH_TIMEOUT + 10):
-                # headless 切换时先关闭旧实例（必须在这里更新 _headless，否则 _need_relaunch 判断会出错）
-                if headless is not None and self._ctx is not None:
-                    if headless != self._headless:
-                        await self._close_browser()
-                    self._headless = headless
-                if await self._need_relaunch(profile_dir, headless):
-                    await self._launch(profile_dir, headless)
-                self._ref_count += 1
-                self._last_used = time.time()
-                ctx = self._ctx
-                if not ctx.pages:
-                    page = await ctx.new_page()
-                else:
-                    page = ctx.pages[0]
-                return ctx, page
+        # 全局互斥锁：跨平台串行化
+        async with self._get_global_lock():
+            async with self._get_lock():
+                async with asyncio.timeout(BROWSER_LAUNCH_TIMEOUT + 10):
+                    # headless 切换时先关闭旧实例（必须在这里更新 _headless，否则 _need_relaunch 判断会出错）
+                    if headless is not None and self._ctx is not None:
+                        if headless != self._headless:
+                            await self._close_browser()
+                        self._headless = headless
+                    if await self._need_relaunch(profile_dir, headless):
+                        await self._launch(profile_dir, headless)
+                    self._ref_count += 1
+                    self._last_used = time.time()
+                    ctx = self._ctx
+                    if not ctx.pages:
+                        page = await ctx.new_page()
+                    else:
+                        page = ctx.pages[0]
+                    return ctx, page
 
     # ---- 上下文管理器 ----
 
@@ -441,11 +456,12 @@ class BrowserManager:
 
     async def shutdown(self) -> None:
         """彻底关闭浏览器（服务关闭时调用）"""
-        try:
-            await self._close_browser()
-        except Exception:
-            pass
-        self._ref_count = 0
+        async with self._get_global_lock():
+            try:
+                await self._close_browser()
+            except Exception:
+                pass
+            self._ref_count = 0
 
     def is_alive(self) -> bool:
         """检查浏览器是否存活（同步）"""

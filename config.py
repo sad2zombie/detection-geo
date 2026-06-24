@@ -2,6 +2,7 @@
 """全局配置"""
 
 import os
+import sys
 from pathlib import Path
 
 # ----- 项目根目录 -----

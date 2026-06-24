@@ -1,0 +1,49 @@
+{
+  "name": "brand-detector",
+  "version": "1.0.0",
+  "description": "品牌认证检测系统",
+  "main": "main.js",
+  "productName": "品牌检测",
+  "asar": false,
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "build:dir": "electron-builder --win --dir",git add .gitignore
+  },
+  "keywords": ["electron", "playwright", "brand-detection"],
+  "author": "Detection",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {},
+  "build": {
+    "appId": "com.brand.detector",
+    "productName": "品牌检测",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "web/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/backend-exe.exe",
+        "to": "backend-exe.exe"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

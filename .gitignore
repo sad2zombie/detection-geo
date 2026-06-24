@@ -53,3 +53,17 @@ __pycache__/
 output_*.json
 *_result.json
 screenshot_*.png
+
+# ===== 构建产物 =====
+# PyInstaller 打包输出（build/ 和 dist/ 由 npm run build 重新生成）
+build/
+dist/
+
+# npm 依赖（npm install 重新安装）
+node_modules/
+
+# 测试结果数据
+data/results/
+
+# ===== Electron 打包产物 =====
+release/

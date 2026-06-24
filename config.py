@@ -18,7 +18,6 @@ CLOAKBROWSER_DIR = Path(os.environ.get(
 DATA_DIR = ROOT_DIR / "data"
 COOKIE_DIR = DATA_DIR / "cookies"
 RESULTS_DIR = DATA_DIR / "results"
-REPORT_DIR = DATA_DIR / "reports"
 
 # ----- 平台 Cookie 持久化目录 -----
 DOUYIN_PROFILE = COOKIE_DIR / "douyin_profile"
@@ -26,10 +25,6 @@ BAIDU_PROFILE = COOKIE_DIR / "baidu_profile"
 XHS_PROFILE = COOKIE_DIR / "xiaohongshu_profile"
 TAOBAO_PROFILE = COOKIE_DIR / "taobao_profile"
 JD_PROFILE = COOKIE_DIR / "jd_profile"
-
-# ----- 阿里百炼 API 配置 -----
-BAILIAN_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
-BAILIAN_MODEL = "qwen3.7-plus"  # 分析用模型
 
 # ----- 支持的平台列表 -----
 PLATFORMS = {

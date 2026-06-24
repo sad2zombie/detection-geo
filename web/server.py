@@ -4,7 +4,6 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Body
@@ -14,7 +13,6 @@ from fastapi.templating import Jinja2Templates
 
 import config
 from core.auth_manager import AuthManager
-from ai.bailian import analyze_results
 
 
 # ---------- 启动时自动检测所有平台登录态（方案 A：失败静默） ----------
@@ -90,11 +88,6 @@ async def index(request: Request):
 @app.get("/results", response_class=HTMLResponse)
 async def results_page(request: Request):
     return templates.TemplateResponse(request, "results.html")
-
-
-@app.get("/report", response_class=HTMLResponse)
-async def report_page(request: Request):
-    return templates.TemplateResponse(request, "report.html")
 
 
 # ---------- API: 登录状态 ----------
@@ -209,33 +202,6 @@ async def api_get_result(platform_key: str, filename: str):
     return JSONResponse(data)
 
 
-# ---------- API: AI 分析 ----------
-@app.post("/api/analyze")
-async def api_analyze(request: Request):
-    """将搜索结果交给阿里百炼分析"""
-    body = await request.json()
-    brand = body.get("brand", "")
-    results = body.get("results", [])
-
-    if not brand or not results:
-        return JSONResponse({"error": "品牌名称和搜索结果不能为空"}, status_code=400)
-
-    analysis = analyze_results(brand, results)
-
-    if analysis["success"]:
-        config.REPORT_DIR.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{brand}_{timestamp}.md"
-        filepath = config.REPORT_DIR / filename
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(f"# {brand} 品牌认证检测报告\n\n")
-            f.write(f"**检测时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            f.write("---\n\n")
-            f.write(analysis["report"])
-
-    return JSONResponse(analysis)
-
-
 # ---------- API: 品牌匹配分析 ----------
 @app.get("/api/analyze_brand")
 async def api_get_analysis():
@@ -311,34 +277,6 @@ async def api_get_analysis():
         "results": results,
         "errors": errors,
     })
-
-
-# ---------- API: 报告列表 ----------
-@app.get("/api/reports")
-async def api_list_reports():
-    """列出所有保存的 AI 分析报告"""
-    if not config.REPORT_DIR.exists():
-        return JSONResponse([])
-    files = sorted(config.REPORT_DIR.glob("*.md"), reverse=True)
-    return JSONResponse([
-        {
-            "filename": f.name,
-            "size": f.stat().st_size,
-            "modified": f.stat().st_mtime,
-        }
-        for f in files
-    ])
-
-
-@app.get("/api/reports/{filename}")
-async def api_get_report(filename: str):
-    """获取指定报告内容"""
-    filepath = config.REPORT_DIR / filename
-    if not filepath.exists():
-        return JSONResponse({"error": "报告不存在"}, status_code=404)
-    with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
-    return JSONResponse({"filename": filename, "content": content})
 
 
 # ---------- API: 平台列表 ----------

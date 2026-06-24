@@ -10,7 +10,7 @@
     <div class="container">
         <header>
             <h1>🔍 品牌认证检测系统</h1>
-            <p class="subtitle">多平台品牌搜索 · 认证状态检测 · AI智能分析</p>
+            <p class="subtitle">多平台品牌搜索 · 认证状态检测</p>
         </header>
 
         <!-- 登录状态 -->
@@ -38,23 +38,15 @@
         <section class="card" id="result-section" style="display:none;">
             <h2>📊 搜索结果</h2>
             <div id="search-results"></div>
-            <div id="analyze-progress" class="progress-area" style="display:none;"></div>
         </section>
 
         <!-- 分析按钮 -->
         <div class="btn-row" id="analyze-row">
-            <button class="btn btn-accent" onclick="startAnalysis()">🤖 AI 分析结果</button>
             <button class="btn btn-outline" onclick="startBrandAnalysis()">🔍 品牌匹配分析</button>
         </div>
 
         <!-- 分析结果 -->
         <div id="brand-analysis-result" class="card" style="display:none; margin-top: 16px;"></div>
-
-        <!-- 报告 -->
-        <section class="card" id="report-section" style="display:none;">
-            <h2>📋 品牌检测报告</h2>
-            <div id="report-content" class="report"></div>
-        </section>
     </div>
 
     <script src="/static/app.js"></script>

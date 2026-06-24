@@ -237,12 +237,11 @@ async function startSearch() {
     const progressEl = document.getElementById("search-progress");
     const resultSection = document.getElementById("result-section");
     const analyzeRow = document.getElementById("analyze-row");
+    const brandAnalysisResult = document.getElementById("brand-analysis-result");
 
     progressEl.style.display = "block";
     progressEl.innerHTML = '<span class="loading"><span class="spinner"></span>正在打开浏览器搜索，请稍候...</span>';
     resultSection.style.display = "none";
-    document.getElementById("report-section").style.display = "none";
-    document.getElementById("analyze-progress").style.display = "none";
     analyzeRow.style.display = "none";
     searchResults = [];
 
@@ -256,12 +255,15 @@ async function startSearch() {
         });
         const data = result.data;
 
-        progressEl.style.display = "none";
-        searchResults = Array.isArray(data) ? data : [data];
-        renderResults(searchResults);
-        resultSection.style.display = "block";
-        analyzeRow.style.display = "block";
-    } catch (e) {
+    progressEl.style.display = "none";
+    searchResults = Array.isArray(data) ? data : [data];
+    renderResults(searchResults);
+    resultSection.style.display = "block";
+    analyzeRow.style.display = "block";
+    // 品牌匹配分析结果区域默认隐藏，搜索后重新显示（先清空旧内容）
+    brandAnalysisResult.style.display = "none";
+    brandAnalysisResult.innerHTML = "";
+} catch (e) {
         progressEl.innerHTML = '<div class="progress-item error">❌ 搜索请求失败: ' + e.message + '</div>';
     }
 }
@@ -451,53 +453,4 @@ async function startBrandAnalysis() {
     } catch (e) {
         resultEl.innerHTML = `<p style="color:#e74c3c;">加载失败: ${e.message}</p>`;
     }
-}
-
-// ---- AI 分析 ----
-async function startAnalysis() {
-    const keyword = document.getElementById("keyword").value.trim();
-    if (!searchResults.length) { toast("请先搜索品牌", "error"); return; }
-
-    const progressEl = document.getElementById("analyze-progress");
-    const reportSection = document.getElementById("report-section");
-    const reportContent = document.getElementById("report-content");
-
-    progressEl.style.display = "block";
-    progressEl.innerHTML = '<span class="loading"><span class="spinner"></span>AI正在分析...</span>';
-    reportSection.style.display = "none";
-
-    try {
-        const result = await api("/api/analyze", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ brand: keyword, results: searchResults }),
-        });
-        const data = result.data;
-
-        progressEl.style.display = "none";
-        reportSection.style.display = "block";
-
-        if (data.success) {
-            reportContent.innerHTML = markdownToHtml(data.report);
-            reportSection.scrollIntoView({ behavior: "smooth" });
-        } else {
-            reportContent.innerHTML = `<div style="color:var(--red)">AI分析失败: ${data.error}</div>`;
-        }
-    } catch (e) {
-        progressEl.style.display = "none";
-        reportSection.style.display = "block";
-        reportContent.innerHTML = `<div style="color:var(--red)">请求失败: ${e.message}</div>`;
-    }
-}
-
-// 简单的 Markdown → HTML
-function markdownToHtml(md) {
-    return md
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/^### (.+)$/gm, "<h3>$1</h3>")
-        .replace(/^## (.+)$/gm, "<h2>$1</h2>")
-        .replace(/^# (.+)$/gm, "<h1>$1</h1>")
-        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-        .replace(/- (.+)/g, "• $1")
-        .replace(/\n/g, "<br>");
 }

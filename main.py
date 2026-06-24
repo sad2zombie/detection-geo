@@ -9,8 +9,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 # 创建必要的数据目录
-from config import DATA_DIR, COOKIE_DIR, RESULTS_DIR, REPORT_DIR
-for d in [DATA_DIR, COOKIE_DIR, RESULTS_DIR, REPORT_DIR]:
+from config import DATA_DIR, COOKIE_DIR, RESULTS_DIR
+for d in [DATA_DIR, COOKIE_DIR, RESULTS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 # 注册进程退出清理（双保险）

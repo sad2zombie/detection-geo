@@ -336,7 +336,7 @@ function renderResults(results) {
                     ${u.xhs_id ? `<div class="user-meta"><span>小红书号: ${u.xhs_id}</span></div>` : ''}
                     ${(u.follower_count || u.note_count) ? `<div class="user-meta">${u.follower_count ? `<span>粉丝: ${u.follower_count}</span>` : ''}${u.note_count ? `<span>笔记: ${u.note_count}</span>` : ''}</div>` : ''}
                     ${u.description ? `<div class="user-desc">${u.description}</div>` : ''}
-                    ${u.profile_url ? `<div class="user-link"><a href="${u.profile_url}" target="_blank">${u.profile_url.length > 60 ? u.profile_url.substring(0, 60) + '...' : u.profile_url}</a></div>` : ''}
+                    ${u.profile_url ? `<div class="user-link"><a href="${u.profile_url}" data-platform="${r.platform || ''}" class="profile-link" target="_blank">${u.profile_url.length > 60 ? u.profile_url.substring(0, 60) + '...' : u.profile_url}</a></div>` : ''}
                 </div>
             `;
         }).join("");
@@ -354,7 +354,7 @@ function renderResults(results) {
                         ${u.xhs_id ? `<div class="user-meta"><span>小红书号: ${u.xhs_id}</span></div>` : ''}
                         ${(u.follower_count || u.note_count) ? `<div class="user-meta">${u.follower_count ? `<span>粉丝: ${u.follower_count}</span>` : ''}${u.note_count ? `<span>笔记: ${u.note_count}</span>` : ''}</div>` : ''}
                         ${u.description ? `<div class="user-desc">${u.description}</div>` : ''}
-                        ${u.profile_url ? `<div class="user-link"><a href="${u.profile_url}" target="_blank">${u.profile_url.length > 60 ? u.profile_url.substring(0, 60) + '...' : u.profile_url}</a></div>` : ''}
+                        ${u.profile_url ? `<div class="user-link"><a href="${u.profile_url}" data-platform="${r.platform || ''}" class="profile-link" target="_blank">${u.profile_url.length > 60 ? u.profile_url.substring(0, 60) + '...' : u.profile_url}</a></div>` : ''}
                     </div>`;
                 }).join("")}
                </div>
@@ -434,7 +434,7 @@ async function startBrandAnalysis() {
                         <td style="padding:8px;">${i + 1}</td>
                         <td style="padding:8px;">${u.name || "-"}</td>
                         <td style="padding:8px;">${u.douyin_id || "-"}</td>
-                        <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" target="_blank">${u.profile_url}</a>` : "-"}</td>
+                        <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" data-platform="${p}" class="profile-link" target="_blank">${u.profile_url}</a>` : "-"}</td>
                     </tr>`;
                 });
                 html += `</tbody></table>`;
@@ -453,7 +453,7 @@ async function startBrandAnalysis() {
                         <td style="padding:8px;">${i + 1}</td>
                         <td style="padding:8px;">${u.name || "-"}</td>
                         <td style="padding:8px;">${u.xhs_id || "-"}</td>
-                        <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" target="_blank">${u.profile_url}</a>` : "-"}</td>
+                        <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" data-platform="${p}" class="profile-link" target="_blank">${u.profile_url}</a>` : "-"}</td>
                     </tr>`;
                 });
                 html += `</tbody></table>`;
@@ -476,7 +476,7 @@ async function startBrandAnalysis() {
                         <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">店铺名称</th><th style="padding:8px;">店铺链接</th></tr></thead>
                         <tbody><tr>
                             <td style="padding:8px;">${r.name}</td>
-                            <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.profile_url ? `<a href="${r.profile_url}" target="_blank">${r.profile_url}</a>` : "-"}</td>
+                            <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.profile_url ? `<a href="${r.profile_url}" data-platform="${p}" class="profile-link" target="_blank">${r.profile_url}</a>` : "-"}</td>
                         </tr></tbody></table>`;
                 } else {
                     html += `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`;
@@ -490,7 +490,7 @@ async function startBrandAnalysis() {
                         <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">店铺名称</th><th style="padding:8px;">店铺链接</th></tr></thead>
                         <tbody><tr>
                             <td style="padding:8px;">${r.name}</td>
-                            <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.profile_url ? `<a href="${r.profile_url}" target="_blank">${r.profile_url}</a>` : "-"}</td>
+                            <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.profile_url ? `<a href="${r.profile_url}" data-platform="${p}" class="profile-link" target="_blank">${r.profile_url}</a>` : "-"}</td>
                         </tr></tbody></table>`;
                 } else {
                     html += `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`;
@@ -503,3 +503,42 @@ async function startBrandAnalysis() {
         resultEl.innerHTML = `<p style="color:#e74c3c;">加载失败: ${e.message}</p>`;
     }
 }
+
+// ---- profile 链接拦截：点击后用对应平台的持久化 BrowserContext 打开 ----
+document.addEventListener("click", async (e) => {
+    const a = e.target.closest && e.target.closest("a.profile-link");
+    if (!a) return;
+    const platform = a.getAttribute("data-platform") || "";
+    const url = a.getAttribute("href") || a.href || "";
+    if (!platform || !url) return;  // 平台识别不出来就放行默认行为（系统浏览器打开）
+    e.preventDefault();
+    try {
+        const result = await api(`/api/auth/login/${platform}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+        });
+        if (!result.ok && !result.data?.success) {
+            toast(`打开链接失败: ${result.data?.error || result.data?.note || "未知错误"}`, "error");
+        }
+    } catch (err) {
+        toast(`打开链接失败: ${err.message}`, "error");
+    }
+});
+
+// ---- 快捷键：Ctrl+Shift+R / Ctrl+Alt+R = 完全重启（让 server.py 改动生效） ----
+document.addEventListener("keydown", async (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "R" || e.key === "r")) {
+        e.preventDefault();
+        if (!window.electronAPI?.reloadApp) {
+            toast("当前不在 Electron 环境中，无法重启", "error");
+            return;
+        }
+        toast("正在重启 app（含 Python 后端）…", "success");
+        try {
+            await window.electronAPI.reloadApp();
+        } catch (err) {
+            toast(`重启失败: ${err.message}`, "error");
+        }
+    }
+});

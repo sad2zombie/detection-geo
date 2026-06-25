@@ -16,7 +16,13 @@ CLOAKBROWSER_DIR = Path(os.environ.get(
 ))
 
 # ----- 数据目录 -----
-DATA_DIR = ROOT_DIR / "data"
+# 优先使用环境变量 DETECTION_DATA_DIR（Electron 启动时设置，指向 %APPDATA%/detection/data/）
+# 未设置时回退到项目根目录的 data/（开发环境用）
+_DETECTION_DATA_DIR_ENV = os.environ.get("DETECTION_DATA_DIR", "").strip()
+if _DETECTION_DATA_DIR_ENV:
+    DATA_DIR = Path(_DETECTION_DATA_DIR_ENV)
+else:
+    DATA_DIR = ROOT_DIR / "data"
 COOKIE_DIR = DATA_DIR / "cookies"
 RESULTS_DIR = DATA_DIR / "results"
 

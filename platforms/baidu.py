@@ -121,6 +121,9 @@ class BaiduPlatform(BasePlatform):
                     await self._bm.shutdown()
                 except Exception:
                     pass
+                # 清空旧引用，避免 _ensure_browser 误判旧 ctx 还活着
+                self._ctx = None
+                self._page = None
                 await self._ensure_browser(headless=False)
             else:
                 print("重试耗尽，返回空结果", flush=True)

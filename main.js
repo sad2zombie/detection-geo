@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require("electron"); // 移除了 globalShortcut
 const path = require("path");
+const fs = require("fs");
 const http = require("http");
 const { spawn } = require("child_process");
 
@@ -27,7 +28,19 @@ function createPyProc(frontendPath) {
     ? []
     : ["-u", path.join(frontendPath, "main.py")];
 
-  const env = { ...process.env, PROJECT_ROOT: projectRoot };
+  // 数据目录：打包模式下放 %APPDATA%/detection/data/，登录态持久保留
+  let dataDir;
+  if (app.isPackaged) {
+    const appDataBase = process.env.APPDATA || path.join(app.getPath("home"), "AppData", "Roaming");
+    dataDir = path.join(appDataBase, "detection", "data");
+  } else {
+    dataDir = path.join(projectRoot, "data");
+  }
+  // 确保目录存在（首次启动自动创建）
+  try { fs.mkdirSync(path.join(dataDir, "cookies"), { recursive: true }); } catch (_) {}
+  try { fs.mkdirSync(path.join(dataDir, "results"), { recursive: true }); } catch (_) {}
+
+  const env = { ...process.env, PROJECT_ROOT: projectRoot, DETECTION_DATA_DIR: dataDir };
   const spawnOpts = app.isPackaged
     ? { env, stdio: ["ignore", "pipe", "pipe"], detached: false, windowsHide: true }
     : { env, stdio: ["ignore", "pipe", "pipe"], detached: false };
@@ -82,6 +95,18 @@ async function createWindow(frontendPath) {
     }
   });
 
+  // Ctrl+R / F5 强刷 webview（绕过缓存；注意：不会重启后端 Python 进程，
+  // 如要重启后端请调 ipc 'reload-app' → app.relaunch）
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const isReload = input.key === 'F5' || (input.key === 'r' && (input.control || input.meta));
+    if (isReload) {
+      mainWindow.webContents.reloadIgnoringCache();
+      event.preventDefault();
+      console.log('[MAIN] Reload (ignore cache)');
+    }
+  });
+
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
     console.log("[MAIN] Window ready to show");
@@ -126,6 +151,27 @@ function waitForBackend(maxWaitMs) {
     tryPing();
   });
 }
+
+// ============================================================================
+// 完全重启 Electron（含 Python 后端子进程）：用于让 server.py 改动生效
+// ============================================================================
+ipcMain.handle("reload-app", async () => {
+  console.log("[MAIN] reload-app requested, relaunching...");
+  // 先杀后端，再让 before-quit 走 relaunch
+  isQuitting = true;
+  if (pyProc) {
+    try {
+      const { exec } = require("child_process");
+      exec("taskkill /F /IM backend-exe.exe", () => {});
+      if (pyProc.pid) {
+        exec(`taskkill /F /T /PID ${pyProc.pid}`, () => {});
+      }
+    } catch (_) {}
+  }
+  app.relaunch();
+  app.exit(0);
+  return { ok: true };
+});
 
 // ============================================================================
 // 转发前端 HTTP 请求到 Python 后端（loadURL 后仍走 IPC 转发以保持一致）

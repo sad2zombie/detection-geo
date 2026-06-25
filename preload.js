@@ -13,4 +13,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("backend-ready", callback);
     return () => ipcRenderer.removeListener("backend-ready", callback);
   },
+
+  // 完全重启 Electron + Python 后端（让 server.py 改动生效）
+  reloadApp: () => ipcRenderer.invoke("reload-app"),
 });

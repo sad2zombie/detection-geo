@@ -90,17 +90,50 @@ class AuthManager:
             results.append(await self.check_status(key))
         return results
 
-    async def login_platform(self, platform_key: str) -> dict:
-        """打开指定平台浏览器并等待用户登录（异步）
+    async def login_platform(self, platform_key: str, url: str | None = None) -> dict:
+        """打开指定平台浏览器并等待用户登录（异步）。
 
         login() 不再自动关闭浏览器，浏览器保持打开以便后续检测复用。
+
+        url 不为空时：BM 启动浏览器 → 独立 newPage → goto url → 后台监听 page 关闭后 release。
         """
         async with self._get_lock(platform_key):
             p = self._get_platform(platform_key)
             if p is None:
                 return {"success": False, "error": "不支持的平台"}
             try:
+                if url:
+                    page = await self._open_profile(p, url)
+                    return {"success": True, "platform": platform_key, "platform_name": p.platform_name, "opened": True, "url": url, "_page": page}
                 success = await p.login()
                 return {"success": success, "platform": platform_key, "platform_name": p.platform_name}
             except Exception as e:
                 return {"success": False, "platform": platform_key, "error": str(e)}
+
+    async def _open_profile(self, p: BasePlatform, url: str) -> Any:
+        """用平台的持久化 BrowserContext 启浏览器 + 独立 newPage 打开 url。
+
+        完成后返回 page 对象（不关闭，page 关闭由后台任务监听后自动 release 引用）。
+        """
+        await p._ensure_browser(headless=False)
+        if p._ctx is None:
+            raise RuntimeError("浏览器未就绪")
+        page = await p._ctx.new_page()
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        except Exception as e:
+            print(f"[AuthManager] open_profile goto 失败（保留 page）: {e}", flush=True)
+
+        async def _wait_close_and_release():
+            try:
+                await page.wait_for_event("close", timeout=3600 * 1000)
+            except Exception:
+                pass
+            finally:
+                try:
+                    await p._bm.release()
+                except Exception:
+                    pass
+
+        asyncio.create_task(_wait_close_and_release())
+        return page

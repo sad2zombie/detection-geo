@@ -6,7 +6,7 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Body
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -122,9 +122,25 @@ async def api_auth_status_single(platform_key: str, refresh: bool = False):
 
 
 @app.post("/api/auth/login/{platform_key}")
-async def api_auth_login(platform_key: str):
-    """打开浏览器等待用户登录（异步）"""
-    result = await auth_manager.login_platform(platform_key)
+async def api_auth_login(platform_key: str, request: Request):
+    """打开浏览器等待用户登录（异步）。
+
+    body 可选 `{"url": "https://..."}`：传入则用同 BM 启浏览器 + 独立 newPage 打开 url
+    （用于点击搜索结果中的 profile 链接时带着登录态跳转）。
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    url = (body.get("url") or "").strip() or None
+    if url:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return JSONResponse({"ok": False, "error": "url 必须以 http(s):// 开头"}, status_code=400)
+    result = await auth_manager.login_platform(platform_key, url=url)
+    if url and result.get("success"):
+        result["ok"] = True
     return JSONResponse(result)
 
 

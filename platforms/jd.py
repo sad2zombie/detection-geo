@@ -9,7 +9,7 @@ from config import JD_PROFILE
 from platforms.base import BasePlatform, SearchResult, UserResult
 from core.browser_manager import get_browser_manager
 
-MAX_SHOPS = 30
+MAX_SHOPS = 10
 
 
 class JdPlatform(BasePlatform):

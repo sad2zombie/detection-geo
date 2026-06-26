@@ -31,7 +31,7 @@ def _parse_follower_count(raw: str | int | float | None) -> float | None:
 
 def _preprocess_douyin_users(users: list[dict], brand: str) -> list[dict] | None:
     """抖音预处理：先匹配品牌名 → 过滤蓝V → 按粉丝数降序 → 取前3 → 精简字段 → URL脱敏"""
-    brand_users = [u for u in users if brand in u.get("name", "")]
+    brand_users = [u for u in users if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower()]
     blue_v_users = [u for u in brand_users if u.get("verification") == "蓝V"]
     if not blue_v_users:
         return None
@@ -93,7 +93,7 @@ _last_keyword: str = ""
 
 def _preprocess_jd_users(users: list[dict], brand: str) -> dict | None:
     """京东预处理：先匹配品牌名，再匹配"官方旗舰店"，取第一个匹配"""
-    brand_users = [u for u in users if brand in u.get("name", "")]
+    brand_users = [u for u in users if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower()]
     official = [u for u in brand_users if "官方旗舰店" in u.get("name", "")]
     if not official:
         return None
@@ -106,7 +106,7 @@ def _preprocess_jd_users(users: list[dict], brand: str) -> dict | None:
 
 def _preprocess_taobao_users(users: list[dict], brand: str) -> dict | None:
     """淘宝预处理：先匹配品牌名，再匹配"官方旗舰店"，取第一个匹配"""
-    brand_users = [u for u in users if brand in u.get("name", "")]
+    brand_users = [u for u in users if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower()]
     official = [u for u in brand_users if "官方旗舰店" in u.get("name", "")]
     if not official:
         return None

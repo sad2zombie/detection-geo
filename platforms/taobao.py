@@ -244,7 +244,7 @@ class TaobaoPlatform(BasePlatform):
             except Exception as tab_err:
                 print(f"    [淘宝搜索] 点击「店铺」tab 失败（忽略）: {tab_err}", flush=True)
 
-            # 滚动加载更多店铺，确保凑够 20 个
+            # 滚动加载更多店铺，确保凑够 15 个
             try:
                 for scroll_round in range(10):
                     await self._page.evaluate("window.scrollBy(0, 600)")
@@ -253,7 +253,7 @@ class TaobaoPlatform(BasePlatform):
                         "document.querySelectorAll('[class*=\"shopCard--\"]').length"
                     )
                     print(f"    [淘宝搜索] 滚动第 {scroll_round + 1} 次，当前店铺数: {current_count}", flush=True)
-                    if current_count >= 20:
+                    if current_count >= 15:
                         print(f"    [淘宝搜索] 已加载 {current_count} 个店铺，满足条件，停止滚动", flush=True)
                         break
             except Exception as scroll_err:
@@ -308,7 +308,7 @@ class TaobaoPlatform(BasePlatform):
 
             print(f"    [淘宝搜索] 提取到 {len(shops_data)} 个店铺卡片数据", flush=True)
 
-            for idx, shop in enumerate(shops_data[:30]):
+            for idx, shop in enumerate(shops_data[:15]):
                 print(f"    [淘宝搜索] 店铺 {idx + 1}: {shop.get('name', '')} | 粉丝：{shop.get('follower_count', '')}", flush=True)
 
             return {
@@ -317,7 +317,7 @@ class TaobaoPlatform(BasePlatform):
                 "platform_name": "淘宝",
                 "search_url": search_url,
                 "total_found": len(shops_data),
-                "users": shops_data[:30],
+                "users": shops_data[:15],
                 "error": "",
             }
 

@@ -56,9 +56,9 @@ analysis_cache: dict[str, dict] = {}
 
 
 def analyze_brand_result(brand: str, users: list[dict]) -> dict:
-    """用 brand 对 users 中的 name 做子串匹配，计算得分和等级"""
+    """用 brand 对 users 中的 name 或 description 做子串匹配，任意一个命中计1分"""
     total = len(users)
-    matched = sum(1 for u in users if brand in u.get("name", ""))
+    matched = sum(1 for u in users if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower() or brand.replace(" ", "").lower() in u.get("description", "").replace(" ", "").lower())
     score = round(matched / total * 100) if total > 0 else 0
 
     if score >= 90:

@@ -81,6 +81,17 @@ async function createWindow(frontendPath) {
 
   mainWindow.setMenu(null);
 
+  // ===== 阻止 <a target="_blank"> / window.open 开新 BrowserWindow =====
+  // 点击搜索结果里的 profile 链接由前端拦截器转给后端 BrowserContext 处理，
+  // 这里统一 deny，避免 Electron 默认开一个不带登录态的小窗口。
+  mainWindow.webContents.setWindowOpenHandler(() => {
+    return { action: "deny" };
+  });
+  // 兜底：旧式 new-window 事件
+  mainWindow.webContents.on("new-window", (event) => {
+    event.preventDefault();
+  });
+
   // ===== 改动1：只在开发环境自动打开 DevTools =====
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools({ mode: "detach" });

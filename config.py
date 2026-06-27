@@ -62,16 +62,6 @@ PLATFORMS = {
     },
 }
 
-# ----- 认证类型标签 -----
-VERIFICATION_LABELS = {
-    "blue_v": "🔵 蓝V(企业认证)",
-    "yellow_v": "🟡 黄V(个人认证)",
-    "official": "✅ 官方认证",
-    "verified": "✓ 已认证",
-    "none": "❌ 无认证",
-    "unknown": "❓ 未知",
-}
-
 # ----- 浏览器配置 -----
 # BROWSER_HEADLESS: 默认无头模式（不弹出窗口），适合服务端自动化检测。
 # 设为 False 可切换到有头调试模式（用户登录场景必须用有头）。

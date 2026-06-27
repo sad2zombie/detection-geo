@@ -18,12 +18,7 @@ from core.auth_manager import AuthManager
 # ---------- 启动时自动检测所有平台登录态（方案 A：失败静默） ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """服务启动后，**后台异步**对所有启用平台跑一次 check_status。
-
-    - 失败静默记日志（方案 A），不阻塞服务
-    - 成功则直接更新 _instances 内部 cookie 状态，无需前端再做动作
-    - 由前端首次 ``checkAuth()`` 拉取最新状态展示
-    """
+    """服务启动后，**后台异步**对所有启用平台跑一次 check_status。"""
     enabled = [k for k, v in config.PLATFORMS.items() if v.get("enabled")]
     if enabled:
         print(f"[启动] 自动检测 {len(enabled)} 个平台登录状态…", flush=True)
@@ -50,31 +45,6 @@ app.mount("/static", StaticFiles(directory=str(web_dir / "static")), name="stati
 templates = Jinja2Templates(directory=str(web_dir / "templates"))
 
 auth_manager = AuthManager()
-
-# 全局分析缓存（内存中暂存各平台分析结果）
-analysis_cache: dict[str, dict] = {}
-
-
-def analyze_brand_result(brand: str, users: list[dict]) -> dict:
-    """用 brand 对 users 中的 name 或 description 做子串匹配，任意一个命中计1分"""
-    total = len(users)
-    matched = sum(1 for u in users if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower() or brand.replace(" ", "").lower() in u.get("description", "").replace(" ", "").lower())
-    score = round(matched / total * 100) if total > 0 else 0
-
-    if score >= 90:
-        grade = "高"
-    elif score >= 75:
-        grade = "中高"
-    elif score >= 60:
-        grade = "中"
-    else:
-        grade = "低"
-
-    return {
-        "platform": "baidu",
-        "score": score,
-        "assessment_grade": grade,
-    }
 
 
 # ---------- 页面路由 ----------
@@ -108,11 +78,7 @@ async def api_auth_status(refresh: bool = False):
 
 @app.get("/api/auth/status/{platform_key}")
 async def api_auth_status_single(platform_key: str, refresh: bool = False):
-    """检查单个平台登录状态（异步）。
-
-    - 默认 (refresh=False)：缓存存在则读缓存，否则触发一次检测
-    - refresh=True：强制重新检测
-    """
+    """检查单个平台登录状态（异步）。"""
     if not refresh:
         cached = auth_manager.get_cached_status(platform_key)
         if cached is not None:
@@ -125,8 +91,7 @@ async def api_auth_status_single(platform_key: str, refresh: bool = False):
 async def api_auth_login(platform_key: str, request: Request):
     """打开浏览器等待用户登录（异步）。
 
-    body 可选 `{"url": "https://..."}`：传入则用同 BM 启浏览器 + 独立 newPage 打开 url
-    （用于点击搜索结果中的 profile 链接时带着登录态跳转）。
+    body 可选 `{"url": "https://..."}`：传入则用同 BM 启浏览器 + 独立 newPage 打开 url。
     """
     try:
         body = await request.json()
@@ -147,7 +112,7 @@ async def api_auth_login(platform_key: str, request: Request):
 # ---------- API: 搜索 ----------
 @app.post("/api/search")
 async def api_search(request: Request, body: dict):
-    """执行搜索：打开浏览器 → 注入cookie → 各平台搜索 → 返回结果"""
+    """执行搜索：打开浏览器 → 注入cookie → 各平台搜索 → 返回结果。"""
     keyword = body.get("keyword", "").strip()
     platform_keys = body.get("platforms", [])
 
@@ -158,13 +123,6 @@ async def api_search(request: Request, body: dict):
 
     from core.search_engine import search_platforms_async
     results = await search_platforms_async(keyword, platform_keys)
-
-    for r in results:
-        if r.get("platform") == "baidu" and not r.get("error") and r.get("users"):
-            analysis = analyze_brand_result(r.get("brand", ""), r.get("users", []))
-            analysis_cache["baidu"] = analysis
-            print(f"[分析结果] 平台={analysis['platform']} 等级={analysis['assessment_grade']}")
-
     return JSONResponse(results)
 
 
@@ -221,98 +179,15 @@ async def api_get_result(platform_key: str, filename: str):
 # ---------- API: 品牌匹配分析 ----------
 @app.get("/api/analyze_brand")
 async def api_get_analysis():
-    """查询已暂存的分析结果，返回统一结构"""
-    from core.search_engine import preprocessed_cache, _last_keyword
-    import uuid
-
-    task_id = str(uuid.uuid4())[:8]
-    brand = _last_keyword
-    results: list = []
-    errors: list = []
-
-    # 抖音
-    if "douyin" in preprocessed_cache:
-        dy_data = preprocessed_cache["douyin"]
-        results.append({
-            "platform": "douyin",
-            "users": dy_data if dy_data else [],
-        })
-
-    # 小红书
-    if "xiaohongshu" in preprocessed_cache:
-        xhs_data = preprocessed_cache["xiaohongshu"]
-        results.append({
-            "platform": "xiaohongshu",
-            "users": xhs_data if xhs_data else [],
-        })
-
-    # 百度
-    if "baidu" in analysis_cache:
-        results.append({
-            "platform": "baidu",
-            "score": analysis_cache["baidu"].get("score", ""),
-            "assessment_grade": analysis_cache["baidu"].get("assessment_grade", ""),
-        })
-
-    # 淘宝
-    if "taobao" in preprocessed_cache:
-        tb_data = preprocessed_cache["taobao"]
-        if tb_data:
-            results.append({
-                "platform": "taobao",
-                "name": tb_data.get("name", ""),
-                "profile_url": tb_data.get("profile_url", ""),
-            })
-        else:
-            results.append({
-                "platform": "taobao",
-                "name": "",
-                "profile_url": "",
-            })
-
-    # 京东
-    if "jd" in preprocessed_cache:
-        jd_data = preprocessed_cache["jd"]
-        if jd_data:
-            results.append({
-                "platform": "jd",
-                "name": jd_data.get("name", ""),
-                "profile_url": jd_data.get("profile_url", ""),
-            })
-        else:
-            results.append({
-                "platform": "jd",
-                "name": "",
-                "profile_url": "",
-            })
-
-    return JSONResponse({
-        "task_id": task_id,
-        "brand": brand,
-        "status": "completed",
-        "results": results,
-        "errors": errors,
-    })
+    """查询已暂存的分析结果，返回统一结构。"""
+    from core.search_engine import get_aggregated_analysis
+    return JSONResponse(get_aggregated_analysis())
 
 
 # ---------- API: 平台列表 ----------
 @app.get("/api/platforms")
 async def api_platforms():
     return JSONResponse(config.PLATFORMS)
-
-
-# ---------- 启动 / 关闭事件 ----------
-@app.on_event("startup")
-async def on_startup():
-    """服务启动时初始化（如有需要）"""
-    pass
-
-
-@app.on_event("shutdown")
-async def on_shutdown():
-    """服务关闭时优雅关闭浏览器"""
-    from core.browser_manager import _shutdown_browser_manager
-    _shutdown_browser_manager()
 
 
 # ---------- 入口 ----------

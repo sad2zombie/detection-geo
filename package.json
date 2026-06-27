@@ -6,7 +6,7 @@
   "productName": "品牌检测",
   "asar": false,
   "scripts": {
-    "start": "electron .",
+    "start": "chcp 65001 >NUL && electron .",
     "build": "electron-builder --win",
     "build:dir": "electron-builder --win --dir"
   },

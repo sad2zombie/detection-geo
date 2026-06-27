@@ -5,17 +5,16 @@ import atexit
 import sys
 from pathlib import Path
 
-# Windows 下包装 stdout，避免 emoji 导致 gbk 编码错误
-# 中文保留，emoji 等超出 GBK 范围的字符自动丢弃
+# Windows 下让 print/日志输出正常显示中文
+# 方式：直接写 sys.stdout.buffer（绕过 TextIOWrapper 的 GBK 编码层），内容保持 UTF-8
 if sys.platform == 'win32':
-    class _GBKSafeWriter:
+    class _Utf8Writer:
         def __init__(self, raw_stream):
             self._raw = raw_stream
 
         def write(self, text):
             if text:
-                safe = text.encode('gbk', errors='replace')
-                self._raw.write(safe)
+                self._raw.write(text.encode('utf-8', errors='replace'))
                 self._raw.flush()
 
         def flush(self):
@@ -27,8 +26,8 @@ if sys.platform == 'win32':
         def fileno(self):
             return self._raw.fileno()
 
-    sys.stdout = _GBKSafeWriter(sys.stdout.buffer)
-    sys.stderr = _GBKSafeWriter(sys.stderr.buffer)
+    sys.stdout = _Utf8Writer(sys.stdout.buffer)
+    sys.stderr = _Utf8Writer(sys.stderr.buffer)
 
 # 确保项目根目录在 sys.path 中
 sys.path.insert(0, str(Path(__file__).parent))

@@ -2,11 +2,36 @@ const { app, BrowserWindow, ipcMain } = require("electron"); // 移除了 global
 const path = require("path");
 const fs = require("fs");
 const http = require("http");
-const { spawn } = require("child_process");
+const { spawn, exec } = require("child_process");
 
 let pyProc = null;
 let mainWindow = null;
 let backendPort = null;
+
+// ============================================================================
+// Windows 控制台直接写 UTF-8（绕过 console.log 的系统代码页限制）
+// ============================================================================
+let _consoleWrite;
+if (process.platform === "win32") {
+  _consoleWrite = (text, isError) => {
+    try {
+      // CONOUT$ 以 UTF-8 编码打开
+      const fd = isError ? 2 : 1;
+      require("fs").writeSync(fd, Buffer.from(text, "utf8"));
+    } catch (_) {
+      if (isError) process.stderr.write(text);
+      else process.stdout.write(text);
+    }
+  };
+} else {
+  _consoleWrite = (text, isError) => {
+    if (isError) process.stderr.write(text);
+    else process.stdout.write(text);
+  };
+}
+
+const _log  = (text) => _consoleWrite(text + "\n", false);
+const _elog = (text) => _consoleWrite(text + "\n", true);
 
 // ============================================================================
 // 启动 Python 后端
@@ -40,23 +65,29 @@ function createPyProc(frontendPath) {
   try { fs.mkdirSync(path.join(dataDir, "cookies"), { recursive: true }); } catch (_) {}
   try { fs.mkdirSync(path.join(dataDir, "results"), { recursive: true }); } catch (_) {}
 
-  const env = { ...process.env, PROJECT_ROOT: projectRoot, DETECTION_DATA_DIR: dataDir };
+  const env = {
+    ...process.env,
+    PYTHONIOENCODING: "utf-8",
+    PYTHONUTF8: "1",
+    PROJECT_ROOT: projectRoot,
+    DETECTION_DATA_DIR: dataDir,
+  };
   const spawnOpts = app.isPackaged
     ? { env, stdio: ["ignore", "pipe", "pipe"], detached: false, windowsHide: true }
     : { env, stdio: ["ignore", "pipe", "pipe"], detached: false };
 
   pyProc = spawn(scriptPath, spawnArgs, spawnOpts);
-  console.log("[MAIN] Backend process spawned, PID:", pyProc.pid);
+  _log("[MAIN] Backend process spawned, PID: " + pyProc.pid);
 
-  pyProc.stdout.on("data", (data) => process.stdout.write(data));
-  pyProc.stderr.on("data", (data) => process.stderr.write(data));
+  pyProc.stdout.on("data", (data) => _log(data.toString("utf8").trimEnd()));
+  pyProc.stderr.on("data", (data) => _elog(data.toString("utf8").trimEnd()));
 
   pyProc.on("error", (err) => {
-    console.error("[MAIN] Backend spawn error:", err.message);
+    _elog("[MAIN] Backend spawn error: " + err.message);
   });
 
   pyProc.on("exit", (code, signal) => {
-    console.log("[MAIN] Backend exited. Code:", code, "Signal:", signal);
+    _log("[MAIN] Backend exited. Code: " + code + " Signal: " + signal);
     pyProc = null;
   });
 }
@@ -101,8 +132,8 @@ async function createWindow(frontendPath) {
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.key === 'F12' && input.type === 'keyDown') {
       mainWindow.webContents.toggleDevTools();
-      event.preventDefault(); // 阻止系统默认行为
-      console.log('[MAIN] F12 pressed (window-internal)');
+      event.preventDefault();
+      _log('[MAIN] F12 pressed (window-internal)');
     }
   });
 
@@ -114,20 +145,20 @@ async function createWindow(frontendPath) {
     if (isReload) {
       mainWindow.webContents.reloadIgnoringCache();
       event.preventDefault();
-      console.log('[MAIN] Reload (ignore cache)');
+      _log('[MAIN] Reload (ignore cache)');
     }
   });
 
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
-    console.log("[MAIN] Window ready to show");
+    _log("[MAIN] Window ready to show");
   });
 
   // 等后端就绪后再加载页面，确保 origin 为 http://127.0.0.1:8000
   backendPort = await waitForBackend(60000);
   const pageUrl = `http://127.0.0.1:${backendPort}`;
   await mainWindow.loadURL(pageUrl);
-  console.log("[MAIN] Loaded " + pageUrl);
+  _log("[MAIN] Loaded " + pageUrl);
 }
 
 // ============================================================================
@@ -141,7 +172,7 @@ function waitForBackend(maxWaitMs) {
     function tryPing() {
       const req = http.get("http://127.0.0.1:8000", (res) => {
         if (res.statusCode === 200) {
-          console.log("[MAIN] Backend ready after ~" + Math.round((Date.now() - startTime) / 1000) + "s");
+          _log("[MAIN] Backend ready after ~" + Math.round((Date.now() - startTime) / 1000) + "s");
           resolve(8000);
         } else {
           scheduleNext();
@@ -167,12 +198,11 @@ function waitForBackend(maxWaitMs) {
 // 完全重启 Electron（含 Python 后端子进程）：用于让 server.py 改动生效
 // ============================================================================
 ipcMain.handle("reload-app", async () => {
-  console.log("[MAIN] reload-app requested, relaunching...");
+  _log("[MAIN] reload-app requested, relaunching...");
   // 先杀后端，再让 before-quit 走 relaunch
   isQuitting = true;
   if (pyProc) {
     try {
-      const { exec } = require("child_process");
       exec("taskkill /F /IM backend-exe.exe", () => {});
       if (pyProc.pid) {
         exec(`taskkill /F /T /PID ${pyProc.pid}`, () => {});
@@ -233,14 +263,12 @@ ipcMain.handle("api-fetch", async (event, url, options = {}) => {
 // 关闭后端进程
 // ============================================================================
 function killBackendProcess(callback) {
-  const { exec } = require("child_process");
-
   exec("taskkill /F /IM backend-exe.exe", (err) => {
-    if (err) console.log("[MAIN] taskkill backend-exe.exe:", err.message);
+    if (err) _log("[MAIN] taskkill backend-exe.exe: " + err.message);
 
     if (pyProc && pyProc.pid) {
       exec(`taskkill /F /T /PID ${pyProc.pid}`, (err2) => {
-        if (err2) console.log("[MAIN] taskkill by PID:", err2.message);
+        if (err2) _log("[MAIN] taskkill by PID: " + err2.message);
         pyProc = null;
         if (callback) callback();
       });
@@ -255,8 +283,8 @@ function killBackendProcess(callback) {
 // Electron 应用生命周期
 // ============================================================================
 app.on("ready", async () => {
-  console.log("[MAIN] app.on(ready)");
-  console.log("[MAIN] isPackaged:", app.isPackaged, "| appPath:", app.getAppPath());
+  _log("[MAIN] app.on(ready)");
+  _log("[MAIN] isPackaged: " + app.isPackaged + " | appPath: " + app.getAppPath());
 
   const frontendPath = app.getAppPath();
 
@@ -277,7 +305,7 @@ app.on("before-quit", (event) => {
   if (pyProc) {
     event.preventDefault();
     killBackendProcess(() => {
-      console.log("[MAIN] Backend killed, quitting...");
+      _log("[MAIN] Backend killed, quitting...");
       app.quit();
     });
     setTimeout(() => { app.exit(0); }, 5000);

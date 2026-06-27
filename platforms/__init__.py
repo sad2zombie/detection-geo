@@ -1,36 +1,46 @@
 # -*- coding: utf-8 -*-
-"""平台 __init__"""
+"""平台注册中心。
 
-from platforms.douyin import DouyinPlatform
-from platforms.baidu import BaiduPlatform
-from platforms.xiaohongshu import XiaohongshuPlatform
-from platforms.taobao import TaobaoPlatform
-from platforms.jd import JdPlatform
+用 ``@register_platform`` 装饰器自动注册平台类，新增平台只需 import 即可，
+无需手动维护映射表。
+"""
 
-PLATFORM_MAP = {
-    "douyin": DouyinPlatform,
-    "baidu": BaiduPlatform,
-    "xiaohongshu": XiaohongshuPlatform,
-    "taobao": TaobaoPlatform,
-    "jd": JdPlatform,
-}
+from platforms.base import BasePlatform
+
+_REGISTRY: dict[str, type[BasePlatform]] = {}
 
 
-def get_platform(key: str):
-    """根据 key 获取平台实例"""
-    cls = PLATFORM_MAP.get(key)
-    if cls:
-        return cls()
-    return None
+def register_platform(cls: type[BasePlatform]) -> type[BasePlatform]:
+    """装饰器：注册平台到全局映射。"""
+    _REGISTRY[cls.platform_key] = cls
+    return cls
 
 
-def get_all_platforms():
-    """获取所有已启用平台实例"""
+def get_platform(key: str) -> BasePlatform | None:
+    """根据 platform_key 获取平台实例。"""
+    cls = _REGISTRY.get(key)
+    return cls() if cls else None
+
+
+def get_all_platforms() -> list[BasePlatform]:
+    """获取所有已启用平台实例。"""
     from config import PLATFORMS
-    instances = []
-    for key, info in PLATFORMS.items():
-        if info.get("enabled"):
-            cls = PLATFORM_MAP.get(key)
-            if cls:
-                instances.append(cls())
-    return instances
+    return [
+        get_platform(k)
+        for k, v in PLATFORMS.items()
+        if v.get("enabled") and k in _REGISTRY
+    ]
+
+
+def get_enabled_keys() -> list[str]:
+    """获取所有已启用平台 key（按 config.PLATFORMS 声明顺序）。"""
+    from config import PLATFORMS
+    return [k for k, v in PLATFORMS.items() if v.get("enabled") and k in _REGISTRY]
+
+
+# 触发装饰器注册（类定义即注册）
+from platforms.douyin import DouyinPlatform          # noqa: F401, E402
+from platforms.baidu import BaiduPlatform            # noqa: F401, E402
+from platforms.xiaohongshu import XiaohongshuPlatform  # noqa: F401, E402
+from platforms.taobao import TaobaoPlatform          # noqa: F401, E402
+from platforms.jd import JdPlatform                  # noqa: F401, E402

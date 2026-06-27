@@ -1,7 +1,30 @@
-// ---- 初始化 ----
+// ---- 全局状态 ----
 let searchResults = [];
 // 跨平台登录串行化：同一时刻只能有一个平台在等待登录，其余按钮禁用并提示排队
 let loginInFlight = null;   // 当前正在登录的平台 key；null 表示空闲
+
+// 平台元数据缓存（首次启动从 /api/platforms 拉取）
+// 形状：{ key: { key, name, icon } }
+window._platforms = {};
+
+// 平台分析展示配置：key → { title, kind }
+// kind = "users-table"  → 表格列：# / 名称 / [idKey] / 主页链接
+// kind = "score-row"    → 单行：匹配得分 / 评价
+// kind = "shop-row"     → 单行：店铺名称 / 店铺链接
+const PLATFORM_ANALYSIS_CONFIG = {
+    douyin:      { title: "🔍 抖音蓝V账号（粉丝排名前3）",      kind: "users-table", idKey: "douyin_id",      idLabel: "抖音号"   },
+    xiaohongshu: { title: "🔍 小红书企业认证账号（粉丝排名前3）", kind: "users-table", idKey: "xhs_id",         idLabel: "小红书号" },
+    baidu:       { title: "🔍 品牌匹配分析（百度）",              kind: "score-row"                                  },
+    jd:          { title: "🔍 京东官方旗舰店",                   kind: "shop-row",      nameLabel: "店铺名称"      },
+    taobao:      { title: "🔍 淘宝官方旗舰店",                   kind: "shop-row",      nameLabel: "店铺名称"      },
+};
+
+function platformName(key) {
+    return (window._platforms[key] && window._platforms[key].name) || key;
+}
+function platformIcon(key) {
+    return (window._platforms[key] && window._platforms[key].icon) || "🔗";
+}
 
 function setLoginButtonsState() {
     // 登录中：所有按钮禁用；空闲：恢复
@@ -40,21 +63,36 @@ async function api(url, options = {}) {
     return { ok: res.ok, status: res.status, data: await res.json() };
 }
 
-// ---- 平台选择栏 ----
-const PLATFORM_META = [
-    { key: "douyin",      name: "抖音",   icon: "🎵" },
-    { key: "baidu",       name: "百度",   icon: "🔍" },
-    { key: "xiaohongshu", name: "小红书", icon: "📕" },
-    { key: "taobao",      name: "淘宝",   icon: "🛒" },
-    { key: "jd",          name: "京东",   icon: "📦" },
-];
+// ---- 平台元数据加载（从后端拉一次，渲染各处复用） ----
+async function loadPlatformMeta() {
+    try {
+        const result = await api("/api/platforms");
+        const data = result.data || {};
+        window._platforms = {};
+        for (const [key, meta] of Object.entries(data)) {
+            window._platforms[key] = {
+                key,
+                name: meta.name || key,
+                icon: meta.icon || "🔗",
+            };
+        }
+    } catch (e) {
+        console.warn("加载平台元数据失败（使用空缓存）", e);
+        window._platforms = {};
+    }
+}
 
+// ---- 平台选择栏 ----
 function renderPlatformSelectBar() {
     const bar = document.getElementById("platform-select-bar");
     if (!bar) return;
     const container = document.createElement("div");
     container.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;align-items:center;";
-    PLATFORM_META.forEach(p => {
+    const keys = Object.keys(window._platforms).length
+        ? Object.keys(window._platforms)
+        : [];   // 拉取失败时为空，由后端 fallback
+    keys.forEach(key => {
+        const p = window._platforms[key];
         const label = document.createElement("label");
         label.className = "platform-checkbox";
         label.innerHTML = `
@@ -193,10 +231,11 @@ function renderPlatformCards(platforms) {
             statusText = "未登录";
         }
         const tooltip = errorMsg ? `⚠️ ${errorMsg}` : (note.length > 80 ? note.substring(0, 80) + "…" : note);
+        const icon = platformIcon(p.platform);
         return `
             <div class="platform-card-item" id="platform-card-${p.platform}">
                 <div class="platform-card-header">
-                    <span class="platform-icon">${p.platform === 'douyin' ? '🎵' : p.platform === 'xiaohongshu' ? '📕' : p.platform === 'taobao' ? '🛒' : p.platform === 'jd' ? '📦' : '🔍'}</span>
+                    <span class="platform-icon">${icon}</span>
                     <span class="platform-name">${p.platform_name || p.platform}</span>
                     <span class="status-dot ${loggedIn ? 'on' : 'off'}"></span>
                     <span class="platform-status ${loggedIn ? 'logged-in' : 'logged-out'}" title="${tooltip.replace(/"/g, '&quot;')}">${statusText}</span>
@@ -226,17 +265,17 @@ async function loadInitialAuthStatus() {
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-    loadInitialAuthStatus();   // 只读 lifespan 写入的缓存，不再启浏览器
+document.addEventListener("DOMContentLoaded", async () => {
+    await loadPlatformMeta();        // 平台元数据必须先就绪
+    loadInitialAuthStatus();         // 只读 lifespan 写入的缓存，不再启浏览器
     renderPlatformSelectBar();
 });
 
 async function loginPlatform(key) {
-    const nameMap = { douyin: "抖音", baidu: "百度", xiaohongshu: "小红书", taobao: "淘宝", jd: "京东" };
-    const name = nameMap[key] || key;
+    const name = platformName(key);
     // 串行化：其他平台正在登录时直接拒绝
     if (loginInFlight !== null && loginInFlight !== key) {
-        const busyName = nameMap[loginInFlight] || loginInFlight;
+        const busyName = platformName(loginInFlight);
         toast(`${busyName} 正在登录，请等待完成后再操作其他平台`, "warn");
         return;
     }
@@ -317,6 +356,27 @@ async function startSearch() {
     }
 }
 
+// ---- 用户卡片渲染（visible / hidden 共享同一个函数） ----
+function renderUserCard(u, platformKey) {
+    const v = u.verification || "unknown";
+    const shortUrl = u.profile_url && u.profile_url.length > 60
+        ? u.profile_url.substring(0, 60) + "..."
+        : u.profile_url;
+    return `
+        <div class="user-card">
+            <div class="user-name">
+                ${u.name || "(无名称)"}
+                <span class="verify-badge verify-${v}">${getVerifyLabel(v, u.verify_type)}</span>
+                ${u.is_private ? '<span class="private-badge">私密</span>' : ''}
+            </div>
+            ${u.xhs_id ? `<div class="user-meta"><span>小红书号: ${u.xhs_id}</span></div>` : ''}
+            ${(u.follower_count || u.note_count) ? `<div class="user-meta">${u.follower_count ? `<span>粉丝: ${u.follower_count}</span>` : ''}${u.note_count ? `<span>笔记: ${u.note_count}</span>` : ''}</div>` : ''}
+            ${u.description ? `<div class="user-desc">${u.description}</div>` : ''}
+            ${u.profile_url ? `<div class="user-link"><a href="${u.profile_url}" data-platform="${platformKey}" class="profile-link" target="_blank">${shortUrl}</a></div>` : ''}
+        </div>
+    `;
+}
+
 function renderResults(results) {
     const container = document.getElementById("search-results");
     container.innerHTML = results.map(r => {
@@ -324,39 +384,11 @@ function renderResults(results) {
         const visibleUsers = allUsers.slice(0, 5);
         const hiddenCount = allUsers.length - 5;
         const error = r.error ? `<div class="progress-item error">⚠️ ${r.error}</div>` : "";
-        const userCards = visibleUsers.map(u => {
-            const v = u.verification || "unknown";
-            return `
-                <div class="user-card">
-                    <div class="user-name">
-                        ${u.name || "(无名称)"}
-                        <span class="verify-badge verify-${v}">${getVerifyLabel(v, u.verify_type)}</span>
-                        ${u.is_private ? '<span class="private-badge">私密</span>' : ''}
-                    </div>
-                    ${u.xhs_id ? `<div class="user-meta"><span>小红书号: ${u.xhs_id}</span></div>` : ''}
-                    ${(u.follower_count || u.note_count) ? `<div class="user-meta">${u.follower_count ? `<span>粉丝: ${u.follower_count}</span>` : ''}${u.note_count ? `<span>笔记: ${u.note_count}</span>` : ''}</div>` : ''}
-                    ${u.description ? `<div class="user-desc">${u.description}</div>` : ''}
-                    ${u.profile_url ? `<div class="user-link"><a href="${u.profile_url}" data-platform="${r.platform || ''}" class="profile-link" target="_blank">${u.profile_url.length > 60 ? u.profile_url.substring(0, 60) + '...' : u.profile_url}</a></div>` : ''}
-                </div>
-            `;
-        }).join("");
+        const userCards = visibleUsers.map(u => renderUserCard(u, r.platform || "")).join("");
         const platformKey = (r.platform || '').replace(/[^a-z0-9]/gi, '_');
         const hiddenSection = hiddenCount > 0
             ? `<div class="hidden-users" id="hidden-users-${platformKey}" style="display:none">
-                ${allUsers.slice(5).map(u => {
-                    const v = u.verification || "unknown";
-                    return `<div class="user-card">
-                        <div class="user-name">
-                            ${u.name || "(无名称)"}
-                            <span class="verify-badge verify-${v}">${getVerifyLabel(v, u.verify_type)}</span>
-                            ${u.is_private ? '<span class="private-badge">私密</span>' : ''}
-                        </div>
-                        ${u.xhs_id ? `<div class="user-meta"><span>小红书号: ${u.xhs_id}</span></div>` : ''}
-                        ${(u.follower_count || u.note_count) ? `<div class="user-meta">${u.follower_count ? `<span>粉丝: ${u.follower_count}</span>` : ''}${u.note_count ? `<span>笔记: ${u.note_count}</span>` : ''}</div>` : ''}
-                        ${u.description ? `<div class="user-desc">${u.description}</div>` : ''}
-                        ${u.profile_url ? `<div class="user-link"><a href="${u.profile_url}" data-platform="${r.platform || ''}" class="profile-link" target="_blank">${u.profile_url.length > 60 ? u.profile_url.substring(0, 60) + '...' : u.profile_url}</a></div>` : ''}
-                    </div>`;
-                }).join("")}
+                ${allUsers.slice(5).map(u => renderUserCard(u, r.platform || "")).join("")}
                </div>
                <button class="btn btn-sm btn-outline" onclick="toggleHiddenUsers('${platformKey}', this)">
                    查看更多 (${hiddenCount})
@@ -382,7 +414,6 @@ function toggleHiddenUsers(platformKey, btn) {
         btn.textContent = "收起";
     } else {
         el.style.display = "none";
-        const platform = platformKey.replace(/_/g, '');
         const allResults = window.searchResults || [];
         for (const r of allResults) {
             if ((r.platform || '').replace(/[^a-z0-9]/gi, '_') === platformKey) {
@@ -404,7 +435,59 @@ function getVerifyLabel(verification, verifyType) {
     return verification || "未知";
 }
 
-// ---- 品牌匹配分析 ----
+// ---- 品牌匹配分析（数据驱动：按 PLATFORM_ANALYSIS_CONFIG 渲染） ----
+function renderAnalysisUsersTable(r, cfg) {
+    const users = r.users || [];
+    const cols = `
+        <th style="padding:8px;">#</th>
+        <th style="padding:8px;">名称</th>
+        <th style="padding:8px;">${cfg.idLabel}</th>
+        <th style="padding:8px;">主页链接</th>`;
+    const rows = users.length
+        ? users.map((u, i) => `
+            <tr>
+                <td style="padding:8px;">${i + 1}</td>
+                <td style="padding:8px;">${u.name || "-"}</td>
+                <td style="padding:8px;">${u[cfg.idKey] || "-"}</td>
+                <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" data-platform="${r.platform}" class="profile-link" target="_blank">${u.profile_url}</a>` : "-"}</td>
+            </tr>`).join("")
+        : "";
+    return `
+        <h3 style="margin-top:24px;">${cfg.title}</h3>
+        ${users.length
+            ? `<table style="width:100%; border-collapse:collapse;">
+                <thead><tr style="text-align:left; border-bottom:1px solid var(--border);">${cols}</tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`
+            : `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`}
+    `;
+}
+
+function renderAnalysisScoreRow(r, cfg) {
+    return `
+        <h3 style="margin-top:24px;">${cfg.title}</h3>
+        <table style="width:100%; border-collapse:collapse;">
+            <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">平台</th><th style="padding:8px;">匹配得分</th><th style="padding:8px;">评价</th></tr></thead>
+            <tbody><tr><td>${r.platform}</td><td>${r.score ?? "-"}</td><td>${r.assessment_grade || "-"}</td></tr></tbody>
+        </table>
+    `;
+}
+
+function renderAnalysisShopRow(r, cfg) {
+    return `
+        <h3 style="margin-top:24px;">${cfg.title}</h3>
+        ${r.name
+            ? `<table style="width:100%; border-collapse:collapse;">
+                <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">${cfg.nameLabel}</th><th style="padding:8px;">${cfg.nameLabel.replace("名称", "链接")}</th></tr></thead>
+                <tbody><tr>
+                    <td style="padding:8px;">${r.name}</td>
+                    <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.profile_url ? `<a href="${r.profile_url}" data-platform="${r.platform}" class="profile-link" target="_blank">${r.profile_url}</a>` : "-"}</td>
+                </tr></tbody>
+            </table>`
+            : `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`}
+    `;
+}
+
 async function startBrandAnalysis() {
     const resultEl = document.getElementById("brand-analysis-result");
     resultEl.style.display = "block";
@@ -422,80 +505,11 @@ async function startBrandAnalysis() {
         }
 
         for (const r of data.results) {
-            const p = r.platform;
-
-            if (p === "douyin" && r.users && r.users.length > 0) {
-                html += `<h3 style="margin-top:24px;">🔍 抖音蓝V账号（粉丝排名前3）</h3>`;
-                html += `<table style="width:100%; border-collapse:collapse;">
-                    <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">#</th><th style="padding:8px;">名称</th><th style="padding:8px;">抖音号</th><th style="padding:8px;">主页链接</th></tr></thead>
-                    <tbody>`;
-                r.users.forEach((u, i) => {
-                    html += `<tr>
-                        <td style="padding:8px;">${i + 1}</td>
-                        <td style="padding:8px;">${u.name || "-"}</td>
-                        <td style="padding:8px;">${u.douyin_id || "-"}</td>
-                        <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" data-platform="${p}" class="profile-link" target="_blank">${u.profile_url}</a>` : "-"}</td>
-                    </tr>`;
-                });
-                html += `</tbody></table>`;
-            } else if (p === "douyin") {
-                html += `<h3 style="margin-top:24px;">🔍 抖音蓝V账号（粉丝排名前3）</h3>`;
-                html += `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`;
-            }
-
-            if (p === "xiaohongshu" && r.users && r.users.length > 0) {
-                html += `<h3 style="margin-top:24px;">🔍 小红书企业认证账号（粉丝排名前3）</h3>`;
-                html += `<table style="width:100%; border-collapse:collapse;">
-                    <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">#</th><th style="padding:8px;">名称</th><th style="padding:8px;">小红书号</th><th style="padding:8px;">主页链接</th></tr></thead>
-                    <tbody>`;
-                r.users.forEach((u, i) => {
-                    html += `<tr>
-                        <td style="padding:8px;">${i + 1}</td>
-                        <td style="padding:8px;">${u.name || "-"}</td>
-                        <td style="padding:8px;">${u.xhs_id || "-"}</td>
-                        <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" data-platform="${p}" class="profile-link" target="_blank">${u.profile_url}</a>` : "-"}</td>
-                    </tr>`;
-                });
-                html += `</tbody></table>`;
-            } else if (p === "xiaohongshu") {
-                html += `<h3 style="margin-top:24px;">🔍 小红书企业认证账号（粉丝排名前3）</h3>`;
-                html += `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`;
-            }
-
-            if (p === "baidu") {
-                html += `<h3 style="margin-top:24px;">🔍 品牌匹配分析（百度）</h3>`;
-                html += `<table style="width:100%; border-collapse:collapse;">
-                    <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">平台</th><th style="padding:8px;">匹配得分</th><th style="padding:8px;">评价</th></tr></thead>
-                    <tbody><tr><td>${r.platform}</td><td>${r.score ?? "-"}</td><td>${r.assessment_grade || "-"}</td></tr></tbody></table>`;
-            }
-
-            if (p === "jd") {
-                html += `<h3 style="margin-top:24px;">🔍 京东官方旗舰店</h3>`;
-                if (r.name) {
-                    html += `<table style="width:100%; border-collapse:collapse;">
-                        <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">店铺名称</th><th style="padding:8px;">店铺链接</th></tr></thead>
-                        <tbody><tr>
-                            <td style="padding:8px;">${r.name}</td>
-                            <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.profile_url ? `<a href="${r.profile_url}" data-platform="${p}" class="profile-link" target="_blank">${r.profile_url}</a>` : "-"}</td>
-                        </tr></tbody></table>`;
-                } else {
-                    html += `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`;
-                }
-            }
-
-            if (p === "taobao") {
-                html += `<h3 style="margin-top:24px;">🔍 淘宝官方旗舰店</h3>`;
-                if (r.name) {
-                    html += `<table style="width:100%; border-collapse:collapse;">
-                        <thead><tr style="text-align:left; border-bottom:1px solid var(--border);"><th style="padding:8px;">店铺名称</th><th style="padding:8px;">店铺链接</th></tr></thead>
-                        <tbody><tr>
-                            <td style="padding:8px;">${r.name}</td>
-                            <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.profile_url ? `<a href="${r.profile_url}" data-platform="${p}" class="profile-link" target="_blank">${r.profile_url}</a>` : "-"}</td>
-                        </tr></tbody></table>`;
-                } else {
-                    html += `<p style="color:var(--text-secondary);padding:8px 0;">无</p>`;
-                }
-            }
+            const cfg = PLATFORM_ANALYSIS_CONFIG[r.platform];
+            if (!cfg) continue;
+            if (cfg.kind === "users-table")      html += renderAnalysisUsersTable(r, cfg);
+            else if (cfg.kind === "score-row")   html += renderAnalysisScoreRow(r, cfg);
+            else if (cfg.kind === "shop-row")    html += renderAnalysisShopRow(r, cfg);
         }
 
         resultEl.innerHTML = html;

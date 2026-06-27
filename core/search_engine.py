@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
-"""搜索调度器 — 管理多平台搜索执行（异步版本）"""
+"""搜索调度器 — 管理多平台搜索执行（异步版本）+ 品牌匹配分析"""
 
-import asyncio
 import json
 from datetime import datetime
-from pathlib import Path
 
 from platforms import get_platform
 from platforms.base import SearchResult
@@ -29,8 +27,12 @@ def _parse_follower_count(raw: str | int | float | None) -> float | None:
         return None
 
 
+# ============================================================
+# 各平台预处理：brand 匹配 → 过滤 → 排序 → 精简字段
+# ============================================================
+
 def _preprocess_douyin_users(users: list[dict], brand: str) -> list[dict] | None:
-    """抖音预处理：先匹配品牌名 → 过滤蓝V → 按粉丝数降序 → 取前3 → 精简字段 → URL脱敏"""
+    """抖音：先匹配品牌名 → 过滤蓝V → 按粉丝数降序 → 取前3 → 精简字段 → URL脱敏"""
     brand_users = [u for u in users if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower()]
     blue_v_users = [u for u in brand_users if u.get("verification") == "蓝V"]
     if not blue_v_users:
@@ -58,7 +60,7 @@ def _preprocess_douyin_users(users: list[dict], brand: str) -> list[dict] | None
 
 
 def _preprocess_xhs_users(users: list[dict]) -> list[dict] | None:
-    """小红书预处理：过滤企业认证 → 按粉丝数降序 → 取前3 → 精简字段 → URL脱敏"""
+    """小红书：过滤企业认证 → 按粉丝数降序 → 取前3 → 精简字段 → URL脱敏"""
     verified_users = [u for u in users if u.get("verification") == "企业认证"]
     if not verified_users:
         return None
@@ -84,15 +86,8 @@ def _preprocess_xhs_users(users: list[dict]) -> list[dict] | None:
     return result
 
 
-# 全局预处理结果缓存（平台名 → 预处理后用户列表）
-preprocessed_cache: dict[str, list[dict] | None] = {}
-
-# 全局记录最近一次搜索关键词
-_last_keyword: str = ""
-
-
 def _preprocess_jd_users(users: list[dict], brand: str) -> dict | None:
-    """京东预处理：先匹配品牌名，再匹配"官方旗舰店"，取第一个匹配"""
+    """京东：先匹配品牌名，再匹配"官方旗舰店"，取第一个匹配"""
     brand_users = [u for u in users if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower()]
     official = [u for u in brand_users if "官方旗舰店" in u.get("name", "")]
     if not official:
@@ -105,7 +100,7 @@ def _preprocess_jd_users(users: list[dict], brand: str) -> dict | None:
 
 
 def _preprocess_taobao_users(users: list[dict], brand: str) -> dict | None:
-    """淘宝预处理：先匹配品牌名，再匹配"官方旗舰店"，取第一个匹配"""
+    """淘宝：先匹配品牌名，再匹配"官方旗舰店"，取第一个匹配"""
     brand_users = [u for u in users if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower()]
     official = [u for u in brand_users if "官方旗舰店" in u.get("name", "")]
     if not official:
@@ -115,6 +110,52 @@ def _preprocess_taobao_users(users: list[dict], brand: str) -> dict | None:
     if "?" in url:
         url = url.split("?")[0]
     return {"platform": "taobao", "name": u.get("name", ""), "profile_url": url}
+
+
+# ============================================================
+# 百度品牌匹配分析
+# ============================================================
+
+def analyze_brand_result(brand: str, users: list[dict]) -> dict:
+    """用 brand 对 users 中的 name 或 description 做子串匹配，任意一个命中计1分。
+
+    返回值示例：``{"platform": "baidu", "score": 85, "assessment_grade": "中高"}``
+    """
+    total = len(users)
+    matched = sum(
+        1 for u in users
+        if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower()
+        or brand.replace(" ", "").lower() in u.get("description", "").replace(" ", "").lower()
+    )
+    score = round(matched / total * 100) if total > 0 else 0
+
+    if score >= 90:
+        grade = "高"
+    elif score >= 75:
+        grade = "中高"
+    elif score >= 60:
+        grade = "中"
+    else:
+        grade = "低"
+
+    return {
+        "platform": "baidu",
+        "score": score,
+        "assessment_grade": grade,
+    }
+
+
+# ============================================================
+# 全局缓存（搜索调度时填充，分析接口读取）
+# ============================================================
+# 全局预处理结果缓存（平台名 → 预处理后用户列表）
+preprocessed_cache: dict[str, list[dict] | None] = {}
+
+# 全局记录最近一次搜索关键词
+_last_keyword: str = ""
+
+# 百度品牌匹配分析结果
+analysis_cache: dict[str, dict] = {}
 
 
 def _save_result(platform_key: str, brand: str, result: dict) -> str:
@@ -134,10 +175,7 @@ def _save_result(platform_key: str, brand: str, result: dict) -> str:
 
 
 async def search_platforms_async(keyword: str, platform_keys: list[str]) -> list[SearchResult]:
-    """异步执行多平台搜索（顺序执行，避免共享 browser_manager 单例时并发抢锁）
-
-    若需要真正并发，可改为每个平台使用独立的 BrowserManager 实例。
-    """
+    """异步执行多平台搜索（顺序执行，避免共享 browser_manager 单例时并发抢锁）。"""
     global _last_keyword
     _last_keyword = keyword
     results: list[SearchResult] = []
@@ -157,14 +195,20 @@ async def search_platforms_async(keyword: str, platform_keys: list[str]) -> list
             continue
         try:
             result = await platform.search(keyword)
-            if key == "douyin" and not result.get("error") and result.get("users"):
-                preprocessed_cache["douyin"] = _preprocess_douyin_users(result["users"], keyword)
-            elif key == "xiaohongshu" and not result.get("error") and result.get("users"):
-                preprocessed_cache["xiaohongshu"] = _preprocess_xhs_users(result["users"])
-            elif key == "jd" and not result.get("error") and result.get("users"):
-                preprocessed_cache["jd"] = _preprocess_jd_users(result["users"], keyword)
-            elif key == "taobao" and not result.get("error") and result.get("users"):
-                preprocessed_cache["taobao"] = _preprocess_taobao_users(result["users"], keyword)
+
+            # 按平台执行对应的预处理，并写入缓存
+            if not result.get("error") and result.get("users"):
+                if key == "douyin":
+                    preprocessed_cache["douyin"] = _preprocess_douyin_users(result["users"], keyword)
+                elif key == "xiaohongshu":
+                    preprocessed_cache["xiaohongshu"] = _preprocess_xhs_users(result["users"])
+                elif key == "jd":
+                    preprocessed_cache["jd"] = _preprocess_jd_users(result["users"], keyword)
+                elif key == "taobao":
+                    preprocessed_cache["taobao"] = _preprocess_taobao_users(result["users"], keyword)
+                elif key == "baidu":
+                    analysis_cache["baidu"] = analyze_brand_result(keyword, result["users"])
+
             filepath = _save_result(key, keyword, result)
             result["saved_to"] = filepath
             results.append(result)
@@ -185,3 +229,67 @@ async def search_platforms_async(keyword: str, platform_keys: list[str]) -> list
                 pass
 
     return results
+
+
+def get_aggregated_analysis() -> dict:
+    """聚合所有平台的分析结果（统一返回给前端）。
+
+    返回结构：
+        ``{"task_id": str, "brand": str, "status": "completed", "results": [...], "errors": [...]}``
+    """
+    import uuid
+
+    task_id = str(uuid.uuid4())[:8]
+    brand = _last_keyword
+    results: list = []
+    errors: list = []
+
+    # 抖音
+    if "douyin" in preprocessed_cache:
+        dy_data = preprocessed_cache["douyin"]
+        results.append({"platform": "douyin", "users": dy_data if dy_data else []})
+
+    # 小红书
+    if "xiaohongshu" in preprocessed_cache:
+        xhs_data = preprocessed_cache["xiaohongshu"]
+        results.append({"platform": "xiaohongshu", "users": xhs_data if xhs_data else []})
+
+    # 百度
+    if "baidu" in analysis_cache:
+        results.append({
+            "platform": "baidu",
+            "score": analysis_cache["baidu"].get("score", ""),
+            "assessment_grade": analysis_cache["baidu"].get("assessment_grade", ""),
+        })
+
+    # 淘宝
+    if "taobao" in preprocessed_cache:
+        tb_data = preprocessed_cache["taobao"]
+        if tb_data:
+            results.append({
+                "platform": "taobao",
+                "name": tb_data.get("name", ""),
+                "profile_url": tb_data.get("profile_url", ""),
+            })
+        else:
+            results.append({"platform": "taobao", "name": "", "profile_url": ""})
+
+    # 京东
+    if "jd" in preprocessed_cache:
+        jd_data = preprocessed_cache["jd"]
+        if jd_data:
+            results.append({
+                "platform": "jd",
+                "name": jd_data.get("name", ""),
+                "profile_url": jd_data.get("profile_url", ""),
+            })
+        else:
+            results.append({"platform": "jd", "name": "", "profile_url": ""})
+
+    return {
+        "task_id": task_id,
+        "brand": brand,
+        "status": "completed",
+        "results": results,
+        "errors": errors,
+    }

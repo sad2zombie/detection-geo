@@ -55,11 +55,6 @@ async def index(request: Request):
     })
 
 
-@app.get("/results", response_class=HTMLResponse)
-async def results_page(request: Request):
-    return templates.TemplateResponse(request, "results.html")
-
-
 # ---------- API: 登录状态 ----------
 @app.get("/api/auth/status")
 async def api_auth_status(refresh: bool = False):
@@ -124,56 +119,6 @@ async def api_search(request: Request, body: dict):
     from core.search_engine import search_platforms_async
     results = await search_platforms_async(keyword, platform_keys)
     return JSONResponse(results)
-
-
-# ---------- API: 历史结果 ----------
-@app.get("/api/results")
-async def api_list_all_results():
-    """列出所有平台的历史搜索结果"""
-    all_results = {}
-    for platform_dir in config.RESULTS_DIR.iterdir():
-        if platform_dir.is_dir():
-            platform_key = platform_dir.name
-            files = sorted(platform_dir.glob("*.json"), reverse=True)
-            all_results[platform_key] = [
-                {
-                    "filename": f.name,
-                    "size": f.stat().st_size,
-                    "modified": f.stat().st_mtime,
-                }
-                for f in files
-            ]
-    return JSONResponse(all_results)
-
-
-@app.get("/api/results/{platform_key}")
-async def api_list_platform_results(platform_key: str):
-    """列出指定平台的历史搜索结果"""
-    platform_dir = config.RESULTS_DIR / platform_key
-    if not platform_dir.exists():
-        return JSONResponse({"error": "平台不存在或无历史记录"}, status_code=404)
-
-    files = sorted(platform_dir.glob("*.json"), reverse=True)
-    return JSONResponse([
-        {
-            "filename": f.name,
-            "size": f.stat().st_size,
-            "modified": f.stat().st_mtime,
-        }
-        for f in files
-    ])
-
-
-@app.get("/api/results/{platform_key}/{filename}")
-async def api_get_result(platform_key: str, filename: str):
-    """获取指定平台的某次搜索结果"""
-    filepath = config.RESULTS_DIR / platform_key / filename
-    if not filepath.exists():
-        return JSONResponse({"error": "文件不存在"}, status_code=404)
-
-    with open(filepath, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return JSONResponse(data)
 
 
 # ---------- API: 品牌匹配分析 ----------

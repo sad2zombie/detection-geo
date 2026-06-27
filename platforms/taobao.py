@@ -111,14 +111,3 @@ class TaobaoPlatform(BasePlatform):
 
         except Exception as e:
             return self._err_result(keyword, search_url, str(e))
-
-    def _err_result(self, keyword: str, search_url: str, error: str) -> SearchResult:
-        return {
-            "brand": keyword,
-            "platform": self.platform_key,
-            "platform_name": self.platform_name,
-            "search_url": search_url,
-            "total_found": 0,
-            "users": [],
-            "error": error,
-        }

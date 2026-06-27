@@ -72,6 +72,22 @@ class BasePlatform(ABC):
         ...
 
     # ============================================================
+    # 公共工具
+    # ============================================================
+
+    def _err_result(self, keyword: str, search_url: str, error: str) -> SearchResult:
+        """统一的错误结果（避免 5 个平台类重复定义）。"""
+        return {
+            "brand": keyword,
+            "platform": self.platform_key,
+            "platform_name": self.platform_name,
+            "search_url": search_url,
+            "total_found": 0,
+            "users": [],
+            "error": error,
+        }
+
+    # ============================================================
     # 浏览器生命周期
     # ============================================================
 
@@ -102,15 +118,16 @@ class BasePlatform(ABC):
                 self._page = self._ctx.pages[0]
 
     async def close(self) -> None:
-        """关闭浏览器，释放引用计数。"""
+        """关闭浏览器，释放引用计数（引用归零时 BrowserManager 自动关浏览器）。
+
+        注意：不要在这里调 ``self._bm.shutdown()``，否则任何一次 release 都会把
+        全局浏览器强制关掉，与其他还在用的平台/调用方抢资源。
+        全局 shutdown 由 ``main.atexit._shutdown_browser_manager`` 兜底。
+        """
         self._ctx = None
         self._page = None
         try:
             await self._bm.release()
-        except Exception:
-            pass
-        try:
-            await self._bm.shutdown()
         except Exception:
             pass
 

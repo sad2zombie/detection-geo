@@ -95,11 +95,17 @@ class BasePlatform(ABC):
         """确保浏览器已启动且可用。"""
         browser_ok = False
         if self._ctx is not None:
-            try:
-                _ = self._ctx.pages
-                browser_ok = True
-            except Exception:
+            # 检查 BM 是否还活着（release 后 BM._ctx 为 None，但 self._ctx 可能还指向死对象）
+            if not self._bm.is_alive():
                 browser_ok = False
+                self._ctx = None
+                self._page = None
+            else:
+                try:
+                    _ = self._ctx.pages
+                    browser_ok = True
+                except Exception:
+                    browser_ok = False
 
         need_relaunch = (
             self._ctx is None

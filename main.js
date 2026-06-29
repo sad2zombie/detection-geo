@@ -145,9 +145,12 @@ async function createWindow(frontendPath) {
   mainWindow.setMenu(null);
 
   // ===== 阻止 <a target="_blank"> / window.open 开新 BrowserWindow =====
-  // 点击搜索结果里的 profile 链接由前端拦截器转给后端 BrowserContext 处理，
-  // 这里统一 deny，避免 Electron 默认开一个不带登录态的小窗口。
-  mainWindow.webContents.setWindowOpenHandler(() => {
+  // 外部链接用系统浏览器打开，内部链接 deny
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // http/https 外部链接 → 系统浏览器打开
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      require("electron").shell.openExternal(url);
+    }
     return { action: "deny" };
   });
   // 兜底：旧式 new-window 事件
@@ -296,11 +299,10 @@ ipcMain.handle("api-fetch", async (event, url, options = {}) => {
 // ============================================================================
 function killBackendProcess(callback) {
   exec("taskkill /F /IM detection-backend-exe.exe", (err) => {
-    if (err) _log("[MAIN] taskkill detection-backend-exe.exe: " + err.message);
+    // taskkill 找不到进程时的 GBK 乱码无需显示，静默忽略
 
     if (pyProc && pyProc.pid) {
       exec(`taskkill /F /T /PID ${pyProc.pid}`, (err2) => {
-        if (err2) _log("[MAIN] taskkill by PID: " + err2.message);
         pyProc = null;
         if (callback) callback();
       });

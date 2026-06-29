@@ -12,12 +12,18 @@ window._platforms = {};
 // kind = "score-row"    → 单行：匹配得分 / 评价
 // kind = "shop-row"     → 单行：店铺名称 / 店铺链接
 const PLATFORM_ANALYSIS_CONFIG = {
-    official_website: { title: "🏢 品牌官网（一级信源）",           kind: "brand-website"                                },
-    douyin:      { title: "🔍 抖音蓝V账号（粉丝排名前3）",      kind: "users-table", idKey: "douyin_id",      idLabel: "抖音号"   },
-    xiaohongshu: { title: "🔍 小红书企业认证账号（粉丝排名前3）", kind: "users-table", idKey: "xhs_id",         idLabel: "小红书号" },
-    baidu:       { title: "🔍 品牌匹配分析（百度）",              kind: "score-row"                                  },
-    jd:          { title: "🔍 京东官方旗舰店",                   kind: "shop-row",      nameLabel: "店铺名称"      },
-    taobao:      { title: "🔍 淘宝官方旗舰店",                   kind: "shop-row",      nameLabel: "店铺名称"      },
+    official_website: { title: "品牌官网",              kind: "brand-website", level: 1 },
+    douyin:      { title: "抖音蓝V账号（粉丝排名前3）",      kind: "users-table", level: 2, idKey: "douyin_id",      idLabel: "抖音号"   },
+    xiaohongshu: { title: "小红书企业认证账号（粉丝排名前3）", kind: "users-table", level: 2, idKey: "xhs_id",         idLabel: "小红书号" },
+    jd:          { title: "京东官方旗舰店",                   kind: "shop-row",    level: 2, nameLabel: "店铺名称"      },
+    taobao:      { title: "淘宝官方旗舰店",                   kind: "shop-row",    level: 2, nameLabel: "店铺名称"      },
+    baidu:       { title: "百度信息密度评估",              kind: "score-row",   level: 3 },
+};
+
+const SOURCE_LEVEL_LABELS = {
+    1: "一级信源（官方网站）",
+    2: "二级信源（平台官方账号）",
+    3: "三级信源（搜索引擎）",
 };
 
 function platformName(key) {
@@ -365,7 +371,8 @@ async function startSearch() {
 
 // ---- 用户卡片渲染（visible / hidden 共享同一个函数） ----
 function renderUserCard(u, platformKey) {
-    const v = u.verification || "unknown";
+    const v = u.verification || "";
+    const showBadge = v && v !== "unknown";
     const shortUrl = u.profile_url && u.profile_url.length > 60
         ? u.profile_url.substring(0, 60) + "..."
         : u.profile_url;
@@ -373,7 +380,7 @@ function renderUserCard(u, platformKey) {
         <div class="user-card">
             <div class="user-name">
                 ${u.name || "(无名称)"}
-                <span class="verify-badge verify-${v}">${getVerifyLabel(v, u.verify_type)}</span>
+                ${showBadge ? `<span class="verify-badge verify-${v}">${getVerifyLabel(v, u.verify_type)}</span>` : ''}
                 ${u.is_private ? '<span class="private-badge">私密</span>' : ''}
             </div>
             ${u.xhs_id ? `<div class="user-meta"><span>小红书号: ${u.xhs_id}</span></div>` : ''}
@@ -497,7 +504,7 @@ function renderAnalysisShopRow(r, cfg) {
 
 function renderBrandWebsite(r, cfg) {
     const hasWebsite = r.website && r.website !== "未找到";
-    const sourceLabel = r.source === "llm" ? "LLM 分析" : r.source === "rule" ? "规则匹配" : r.source === "error" ? "异常" : r.source || "-";
+    const sourceLabel = r.source === "llm" ? "LLM 分析" : r.source === "llm_fallback" ? "LLM 兜底" : r.source === "rule" ? "规则匹配" : r.source === "error" ? "异常" : r.source || "-";
     return `
         <h3 style="margin-top:24px;">${cfg.title}</h3>
         <table style="width:100%; border-collapse:collapse;">
@@ -534,13 +541,24 @@ async function startBrandAnalysis() {
             html += `<p style="margin-bottom:16px;color:var(--text-secondary);">品牌: <strong>${data.brand}</strong> &nbsp; Task ID: ${data.task_id}</p>`;
         }
 
-        for (const r of data.results) {
-            const cfg = PLATFORM_ANALYSIS_CONFIG[r.platform];
-            if (!cfg) continue;
-            if (cfg.kind === "brand-website") html += renderBrandWebsite(r, cfg);
-            else if (cfg.kind === "users-table")      html += renderAnalysisUsersTable(r, cfg);
-            else if (cfg.kind === "score-row")   html += renderAnalysisScoreRow(r, cfg);
-            else if (cfg.kind === "shop-row")    html += renderAnalysisShopRow(r, cfg);
+        // 按信源层级分组渲染
+        const levels = [1, 2, 3];
+        for (const level of levels) {
+            const items = data.results.filter(r => {
+                const cfg = PLATFORM_ANALYSIS_CONFIG[r.platform];
+                return cfg && cfg.level === level;
+            });
+            if (items.length === 0) continue;
+
+            html += `<div style="margin-top:20px;margin-bottom:8px;padding:6px 12px;background:rgba(255,255,255,0.05);border-radius:6px;font-weight:600;color:var(--text-secondary);font-size:14px;">${SOURCE_LEVEL_LABELS[level]}</div>`;
+
+            for (const r of items) {
+                const cfg = PLATFORM_ANALYSIS_CONFIG[r.platform];
+                if (cfg.kind === "brand-website") html += renderBrandWebsite(r, cfg);
+                else if (cfg.kind === "users-table") html += renderAnalysisUsersTable(r, cfg);
+                else if (cfg.kind === "score-row") html += renderAnalysisScoreRow(r, cfg);
+                else if (cfg.kind === "shop-row") html += renderAnalysisShopRow(r, cfg);
+            }
         }
 
         resultEl.innerHTML = html;

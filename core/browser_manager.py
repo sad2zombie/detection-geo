@@ -298,7 +298,7 @@ class BrowserManager:
                 ["wmic", "process", "where",
                  f'CommandLine like "%{profile_dir}%"',
                  "get", "ProcessId"],
-                capture_output=True, text=True, timeout=10, encoding="utf-8", errors="replace",
+                capture_output=True, text=True, timeout=10, encoding="gbk", errors="replace",
             )
             for line in result.stdout.splitlines():
                 line = line.strip()
@@ -307,7 +307,7 @@ class BrowserManager:
                     try:
                         subprocess.run(
                             ["taskkill", "/F", "/PID", str(pid)],
-                            capture_output=True, timeout=5,
+                            capture_output=True, timeout=5, encoding="gbk", errors="replace",
                         )
                         killed.append(pid)
                     except Exception:

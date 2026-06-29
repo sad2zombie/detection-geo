@@ -29,6 +29,18 @@ if sys.platform == 'win32':
     sys.stdout = _Utf8Writer(sys.stdout.buffer)
     sys.stderr = _Utf8Writer(sys.stderr.buffer)
 
+# ── 单例限制：Windows 命名互斥锁，防止重复启动 ──
+if sys.platform == 'win32':
+    import ctypes
+    _mutex = ctypes.windll.kernel32.CreateMutexW(None, True, "Global\\DetectionApp_Singleton")
+    _last_error = ctypes.windll.kernel32.GetLastError()
+    if _last_error == 183:  # ERROR_ALREADY_EXISTS
+        import ctypes.wintypes
+        ctypes.windll.user32.MessageBoxW(
+            0, "检测程序已在运行中，请勿重复打开。", "提示", 0x40
+        )
+        sys.exit(0)
+
 # 确保项目根目录在 sys.path 中
 sys.path.insert(0, str(Path(__file__).parent))
 

@@ -1,3 +1,35 @@
+// ── 单例限制：在加载 Electron 模块之前用文件锁检查，避免第二个实例有任何窗口闪烁 ──
+const _lockFile = require("path").join(
+  require("os").tmpdir(),
+  "detection-app-single.lock"
+);
+try {
+  const _fs = require("fs");
+  // 检查是否已有实例在运行
+  try {
+    const existingPid = parseInt(_fs.readFileSync(_lockFile, "utf8"), 10);
+    // 检查 PID 是否仍然存活
+    process.kill(existingPid, 0);  // 信号 0 = 不实际发信号，只检查是否存在
+    // PID 存活，已有实例在运行 → 写信号文件通知第一个实例聚焦窗口，然后立即退出
+    const _signalFile = _lockFile + ".focus";
+    _fs.writeFileSync(_signalFile, String(Date.now()));
+    process.exit(0);
+  } catch (_) {
+    // PID 不存在（进程已死）或文件不存在，清理旧锁文件
+    try { _fs.unlinkSync(_lockFile); } catch (__) {}
+  }
+  // 创建新锁文件
+  const fd = _fs.openSync(_lockFile, "wx");
+  _fs.writeSync(fd, String(process.pid));
+  _fs.closeSync(fd);
+  // 进程退出时清理锁文件
+  process.on("exit", () => { try { _fs.unlinkSync(_lockFile); } catch (_) {} });
+  process.on("SIGINT", () => { try { _fs.unlinkSync(_lockFile); } catch (_) {} process.exit(); });
+  process.on("SIGTERM", () => { try { _fs.unlinkSync(_lockFile); } catch (_) {} process.exit(); });
+} catch (_) {
+  // 其他异常情况不影响正常启动
+}
+
 const { app, BrowserWindow, ipcMain } = require("electron"); // 移除了 globalShortcut
 const path = require("path");
 const fs = require("fs");
@@ -280,9 +312,27 @@ function killBackendProcess(callback) {
 }
 
 // ============================================================================
+// 单例限制：只允许运行一个实例
+// ============================================================================
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+  process.exit(0);
+} else {
+  app.on("second-instance", (event, commandLine, workingDirectory) => {
+    // 有人尝试启动第二个实例，聚焦已有窗口
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
+// ============================================================================
 // Electron 应用生命周期
 // ============================================================================
 app.on("ready", async () => {
+  if (!gotTheLock) return;  // 第二个实例直接跳过，不创建窗口
   _log("[MAIN] app.on(ready)");
   _log("[MAIN] isPackaged: " + app.isPackaged + " | appPath: " + app.getAppPath());
 
@@ -290,6 +340,26 @@ app.on("ready", async () => {
 
   createPyProc(frontendPath);
   await createWindow(frontendPath);
+
+  // ===== 监听第二个实例的聚焦信号 =====
+  const _signalFile = _lockFile + ".focus";
+  _log("[MAIN] Watching signal file: " + _signalFile);
+  setInterval(() => {
+    try {
+      if (fs.existsSync(_signalFile)) {
+        fs.unlinkSync(_signalFile);
+        _log("[MAIN] Second instance detected, focusing window");
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.moveTop();
+          mainWindow.focus();
+        }
+      }
+    } catch (e) {
+      _log("[MAIN] Signal watcher error: " + e.message);
+    }
+  }, 500);
 
   // ===== 移除了 globalShortcut 注册 =====
 });

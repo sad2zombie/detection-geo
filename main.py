@@ -32,6 +32,19 @@ if sys.platform == 'win32':
 # 确保项目根目录在 sys.path 中
 sys.path.insert(0, str(Path(__file__).parent))
 
+# ── 加载 .env 配置文件（优先级：APPDATA > 项目根目录）──
+# 打包后用户只需编辑 %APPDATA%/detection/.env 即可配置 LLM API Key 等参数
+import os
+from dotenv import load_dotenv
+
+_project_root = Path(__file__).parent
+_appdata_env = Path(os.environ.get("APPDATA", "")) / "detection" / ".env"
+
+if _appdata_env.is_file():
+    load_dotenv(_appdata_env)
+elif (_project_root / ".env").is_file():
+    load_dotenv(_project_root / ".env")
+
 # 创建必要的数据目录
 from config import DATA_DIR, COOKIE_DIR, RESULTS_DIR
 for d in [DATA_DIR, COOKIE_DIR, RESULTS_DIR]:

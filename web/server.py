@@ -41,7 +41,14 @@ app = FastAPI(title="品牌检测系统", version="0.1.0", lifespan=lifespan)
 # 静态文件 + 模板
 BASE_DIR = Path(__file__).parent.parent
 web_dir = BASE_DIR / "web"
-app.mount("/static", StaticFiles(directory=str(web_dir / "static")), name="static")
+# 禁止静态文件缓存（Electron 浏览器缓存比较顽固，必须服务端强制禁用）
+class NoCacheStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        return response
+
+app.mount("/static", NoCacheStaticFiles(directory=str(web_dir / "static")), name="static")
 templates = Jinja2Templates(directory=str(web_dir / "templates"))
 
 auth_manager = AuthManager()
@@ -127,6 +134,23 @@ async def api_get_analysis():
     """查询已暂存的分析结果，返回统一结构。"""
     from core.search_engine import get_aggregated_analysis
     return JSONResponse(get_aggregated_analysis())
+
+
+# ---------- API: 品牌官网查询（一级信源，可独立调用）----------
+@app.post("/api/brand-website")
+async def api_brand_website(request: Request):
+    """独立品牌官网查询接口（不依赖平台搜索）。"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    brand_name = (body.get("brand_name") or "").strip()
+    if not brand_name:
+        return JSONResponse({"error": "品牌名称不能为空"}, status_code=400)
+
+    from core.brand_search import search_brand
+    result = await search_brand(brand_name)
+    return JSONResponse(result)
 
 
 # ---------- API: 平台列表 ----------

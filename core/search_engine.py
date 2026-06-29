@@ -157,6 +157,22 @@ _last_keyword: str = ""
 # 百度品牌匹配分析结果
 analysis_cache: dict[str, dict] = {}
 
+# 一级信源：品牌官网查询结果
+brand_website_cache: dict | None = None
+
+
+def _preprocess_official_website(users: list[dict]) -> dict | None:
+    """官网：提取品牌名、官网URL、简介"""
+    if not users:
+        return None
+    u = users[0]
+    return {
+        "platform": "official_website",
+        "brand_name": u.get("name", ""),
+        "website": u.get("profile_url", ""),
+        "description": u.get("description", ""),
+    }
+
 
 def _save_result(platform_key: str, brand: str, result: dict) -> str:
     """保存搜索结果到磁盘"""
@@ -208,6 +224,8 @@ async def search_platforms_async(keyword: str, platform_keys: list[str]) -> list
                     preprocessed_cache["taobao"] = _preprocess_taobao_users(result["users"], keyword)
                 elif key == "baidu":
                     analysis_cache["baidu"] = analyze_brand_result(keyword, result["users"])
+                elif key == "official_website":
+                    preprocessed_cache["official_website"] = _preprocess_official_website(result["users"])
 
             filepath = _save_result(key, keyword, result)
             result["saved_to"] = filepath
@@ -243,6 +261,14 @@ def get_aggregated_analysis() -> dict:
     brand = _last_keyword
     results: list = []
     errors: list = []
+
+    # 一级信源：品牌官网
+    if "official_website" in preprocessed_cache:
+        ow = preprocessed_cache["official_website"]
+        if ow:
+            results.append(ow)
+        else:
+            results.append({"platform": "official_website", "brand_name": brand, "website": "未找到", "description": ""})
 
     # 抖音
     if "douyin" in preprocessed_cache:

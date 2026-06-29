@@ -9,11 +9,27 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 
 # ----- CloakBrowser 路径配置 -----
-# 优先从环境变量 CLOAKBROWSER_DIR 读取；未设置时默认找项目根目录下的 cloakbrowser/ 子目录
-CLOAKBROWSER_DIR = Path(os.environ.get(
-    "CLOAKBROWSER_DIR",
-    ROOT_DIR / "cloakbrowser"
-))
+# 业务侧用 CloakBrowser 的 stealth Chromium，不依赖 Playwright。
+#
+# 解析顺序：
+#   1. 环境变量 CLOAKBROWSER_DIR（用户/部署环境显式指定）
+#   2. frozen 环境：runtime_hook 会把 _MEIPASS/cloakbrowser 塞到 sys.path，这里返回空字符串
+#      （_ensure_cloakbrowser 会从 sys 中已经注入的路径定位，不再硬性要求目录存在）
+#   3. 开发环境：项目根目录下的 cloakbrowser/ 子目录
+import os as _os
+import sys as _sys
+
+if getattr(_sys, "frozen", False):
+    _BUNDLE_DIR = Path(getattr(_sys, "_MEIPASS", _os.path.dirname(_sys.executable)))
+    # 在 frozen 环境下，runtime_hook 已把 _MEIPASS/cloakbrowser 加到 sys.path，
+    # cloakbrowser 包作为数据文件在 _MEIPASS/cloakbrowser/ 下。这里返回一个无害的占位路径，
+    # _ensure_cloakbrowser() 中的"目录存在性检查"会被跳过，因为它已经在 sys.path 中。
+    CLOAKBROWSER_DIR = _BUNDLE_DIR / "cloakbrowser"
+else:
+    CLOAKBROWSER_DIR = Path(_os.environ.get(
+        "CLOAKBROWSER_DIR",
+        ROOT_DIR / "cloakbrowser"
+    ))
 
 # ----- 数据目录 -----
 # 优先使用环境变量 DETECTION_DATA_DIR（Electron 启动时设置，指向 %APPDATA%/detection/data/）
@@ -60,6 +76,11 @@ PLATFORMS = {
         "icon": "📦",
         "enabled": True,
     },
+    "official_website": {
+        "name": "官网",
+        "icon": "🏢",
+        "enabled": True,
+    },
 }
 
 # ----- 浏览器配置 -----
@@ -79,3 +100,18 @@ BROWSER_LAUNCH_TIMEOUT = 30
 # BROWSER_IDLE_TIMEOUT: 浏览器空闲超时（秒），无任务时自动关闭
 BROWSER_IDLE_TIMEOUT = 300
 BROWSER_LAUNCH_RETRIES = 1
+
+# ----- 品牌官网检测（一级信源）配置 -----
+# LLM API 配置（OpenAI 兼容接口）
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
+LLM_API_BASE = os.environ.get("LLM_API_BASE", "https://api.openai.com/v1")
+LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o")
+
+# 搜索引擎 API Key（可选，无 Key 时使用百度/Bing HTML 抓取）
+BING_API_KEY = os.environ.get("BING_API_KEY", "")
+
+# 博查 AI 搜索 API Key（可选，作为最终降级引擎）
+BOCHA_API_KEY = os.environ.get("BOCHA_API_KEY", "")
+
+# 品牌查询开关（设为 False 可跳过一级信源检测）
+BRAND_SEARCH_ENABLED = os.environ.get("BRAND_SEARCH_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")

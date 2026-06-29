@@ -40,7 +40,7 @@ function createPyProc(frontendPath) {
   let scriptPath;
 
   if (app.isPackaged) {
-    scriptPath = path.join(process.resourcesPath, "backend-exe.exe");
+    scriptPath = path.join(process.resourcesPath, "detection-backend-exe.exe");
   } else {
     scriptPath = "C:\\Users\\pyproject_ENV\\browser\\Scripts\\python.exe";
   }
@@ -203,7 +203,7 @@ ipcMain.handle("reload-app", async () => {
   isQuitting = true;
   if (pyProc) {
     try {
-      exec("taskkill /F /IM backend-exe.exe", () => {});
+      exec("taskkill /F /IM detection-backend-exe.exe", () => {});
       if (pyProc.pid) {
         exec(`taskkill /F /T /PID ${pyProc.pid}`, () => {});
       }
@@ -263,8 +263,8 @@ ipcMain.handle("api-fetch", async (event, url, options = {}) => {
 // 关闭后端进程
 // ============================================================================
 function killBackendProcess(callback) {
-  exec("taskkill /F /IM backend-exe.exe", (err) => {
-    if (err) _log("[MAIN] taskkill backend-exe.exe: " + err.message);
+  exec("taskkill /F /IM detection-backend-exe.exe", (err) => {
+    if (err) _log("[MAIN] taskkill detection-backend-exe.exe: " + err.message);
 
     if (pyProc && pyProc.pid) {
       exec(`taskkill /F /T /PID ${pyProc.pid}`, (err2) => {

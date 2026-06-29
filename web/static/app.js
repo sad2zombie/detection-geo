@@ -12,6 +12,7 @@ window._platforms = {};
 // kind = "score-row"    → 单行：匹配得分 / 评价
 // kind = "shop-row"     → 单行：店铺名称 / 店铺链接
 const PLATFORM_ANALYSIS_CONFIG = {
+    official_website: { title: "🏢 品牌官网（一级信源）",           kind: "brand-website"                                },
     douyin:      { title: "🔍 抖音蓝V账号（粉丝排名前3）",      kind: "users-table", idKey: "douyin_id",      idLabel: "抖音号"   },
     xiaohongshu: { title: "🔍 小红书企业认证账号（粉丝排名前3）", kind: "users-table", idKey: "xhs_id",         idLabel: "小红书号" },
     baidu:       { title: "🔍 品牌匹配分析（百度）",              kind: "score-row"                                  },
@@ -488,6 +489,29 @@ function renderAnalysisShopRow(r, cfg) {
     `;
 }
 
+function renderBrandWebsite(r, cfg) {
+    const hasWebsite = r.website && r.website !== "未找到";
+    const sourceLabel = r.source === "llm" ? "LLM 分析" : r.source === "rule" ? "规则匹配" : r.source === "error" ? "异常" : r.source || "-";
+    return `
+        <h3 style="margin-top:24px;">${cfg.title}</h3>
+        <table style="width:100%; border-collapse:collapse;">
+            <thead><tr style="text-align:left; border-bottom:1px solid var(--border);">
+                <th style="padding:8px;">品牌名称</th>
+                <th style="padding:8px;">官网地址</th>
+                <th style="padding:8px;">品牌简介</th>
+            </tr></thead>
+            <tbody><tr>
+                <td style="padding:8px;">${r.brand_name || "-"}</td>
+                <td style="padding:8px;max-width:280px;word-break:break-all;">${hasWebsite
+                    ? `<a href="${r.website}" target="_blank" rel="noopener">${r.website}</a>`
+                    : '<span style="color:var(--text-secondary)">未找到</span>'}</td>
+                <td style="padding:8px;max-width:400px;font-size:14px;">${r.description || "-"}</td>
+            </tr></tbody>
+        </table>
+        <p style="color:var(--text-secondary);font-size:12px;margin-top:4px;">数据来源: ${sourceLabel}</p>
+    `;
+}
+
 async function startBrandAnalysis() {
     const resultEl = document.getElementById("brand-analysis-result");
     resultEl.style.display = "block";
@@ -507,7 +531,8 @@ async function startBrandAnalysis() {
         for (const r of data.results) {
             const cfg = PLATFORM_ANALYSIS_CONFIG[r.platform];
             if (!cfg) continue;
-            if (cfg.kind === "users-table")      html += renderAnalysisUsersTable(r, cfg);
+            if (cfg.kind === "brand-website") html += renderBrandWebsite(r, cfg);
+            else if (cfg.kind === "users-table")      html += renderAnalysisUsersTable(r, cfg);
             else if (cfg.kind === "score-row")   html += renderAnalysisScoreRow(r, cfg);
             else if (cfg.kind === "shop-row")    html += renderAnalysisShopRow(r, cfg);
         }

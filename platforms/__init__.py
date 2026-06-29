@@ -44,3 +44,4 @@ from platforms.baidu import BaiduPlatform            # noqa: F401, E402
 from platforms.xiaohongshu import XiaohongshuPlatform  # noqa: F401, E402
 from platforms.taobao import TaobaoPlatform          # noqa: F401, E402
 from platforms.jd import JdPlatform                  # noqa: F401, E402
+from platforms.official_website import OfficialWebsitePlatform  # noqa: F401, E402

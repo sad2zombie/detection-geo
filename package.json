@@ -22,7 +22,7 @@
     "appId": "com.brand.detector",
     "productName": "品牌检测",
     "directories": {
-      "output": "dist-electron"
+      "output": "release"
     },
     "files": [
       "main.js",
@@ -32,8 +32,8 @@
     ],
     "extraResources": [
       {
-        "from": "dist/backend-exe.exe",
-        "to": "backend-exe.exe"
+        "from": "dist/detection-backend-exe.exe",
+        "to": "detection-backend-exe.exe"
       }
     ],
     "win": {

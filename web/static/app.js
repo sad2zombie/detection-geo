@@ -75,6 +75,7 @@ async function loadPlatformMeta() {
                 key,
                 name: meta.name || key,
                 icon: meta.icon || "🔗",
+                requires_login: meta.requires_login !== false,
             };
         }
     } catch (e) {
@@ -218,7 +219,12 @@ function updatePlatformCard(p) {
 
 function renderPlatformCards(platforms) {
     const container = document.getElementById("auth-status");
-    container.innerHTML = platforms.map(p => {
+    // 过滤掉不需要登录的平台（百度、官网）
+    const filtered = platforms.filter(p => {
+        const meta = window._platforms[p.platform];
+        return meta ? meta.requires_login !== false : true;
+    });
+    container.innerHTML = filtered.map(p => {
         const loggedIn = Boolean(p.isLoggedIn);
         const note = (p.note || "").trim();
         const errorMsg = (p.error || "").trim();

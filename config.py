@@ -55,31 +55,37 @@ PLATFORMS = {
         "name": "抖音",
         "icon": "🎵",
         "enabled": True,
+        "requires_login": True,
     },
     "baidu": {
         "name": "百度",
         "icon": "🔍",
         "enabled": True,
+        "requires_login": False,
     },
     "xiaohongshu": {
         "name": "小红书",
         "icon": "📕",
         "enabled": True,
+        "requires_login": True,
     },
     "taobao": {
         "name": "淘宝",
         "icon": "🛒",
         "enabled": True,
+        "requires_login": True,
     },
     "jd": {
         "name": "京东",
         "icon": "📦",
         "enabled": True,
+        "requires_login": True,
     },
     "official_website": {
         "name": "官网",
         "icon": "🏢",
         "enabled": True,
+        "requires_login": False,
     },
 }
 

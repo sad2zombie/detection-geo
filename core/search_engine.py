@@ -1,12 +1,28 @@
 # -*- coding: utf-8 -*-
 """搜索调度器 — 管理多平台搜索执行（异步版本）+ 品牌匹配分析"""
 
+import asyncio
 import json
 from datetime import datetime
 
 from platforms import get_platform
 from platforms.base import SearchResult
 from config import RESULTS_DIR
+
+
+class DetectBusyError(Exception):
+    """已有 detect 任务在执行，拒绝并发请求。"""
+
+
+_detect_running = False
+_detect_state_lock: asyncio.Lock | None = None
+
+
+def _get_detect_state_lock() -> asyncio.Lock:
+    global _detect_state_lock
+    if _detect_state_lock is None:
+        _detect_state_lock = asyncio.Lock()
+    return _detect_state_lock
 
 
 def _parse_follower_count(raw: str | int | float | None) -> float | None:
@@ -160,6 +176,138 @@ analysis_cache: dict[str, dict] = {}
 # 一级信源：品牌官网查询结果
 brand_website_cache: dict | None = None
 
+# 对外 detect 接口固定返回的平台及顺序
+DETECT_PLATFORM_ORDER = (
+    "official_website",
+    "douyin",
+    "xiaohongshu",
+    "baidu",
+    "taobao",
+    "jd",
+)
+
+
+def _reset_analysis_caches() -> None:
+    """每次搜索前清空，避免上次结果污染。"""
+    preprocessed_cache.clear()
+    analysis_cache.clear()
+
+
+def _empty_platform_result(platform: str, brand: str) -> dict:
+    """单平台无数据时的空结构（对接契约）。"""
+    if platform == "official_website":
+        return {"platform": "official_website", "brand_name": brand, "website": "", "description": ""}
+    if platform == "douyin":
+        return {"platform": "douyin", "users": []}
+    if platform == "xiaohongshu":
+        return {"platform": "xiaohongshu", "users": []}
+    if platform == "baidu":
+        return {"platform": "baidu", "score": "", "assessment_grade": ""}
+    if platform == "taobao":
+        return {"platform": "taobao", "name": "", "profile_url": ""}
+    if platform == "jd":
+        return {"platform": "jd", "name": "", "profile_url": ""}
+    return {"platform": platform}
+
+
+def _platform_result_from_cache(platform: str, brand: str) -> dict:
+    """从缓存构建单平台结果；无缓存或预处理为空则返回空结构。"""
+    if platform == "official_website":
+        ow = preprocessed_cache.get("official_website")
+        if ow:
+            return {
+                "platform": "official_website",
+                "brand_name": ow.get("brand_name", brand),
+                "website": ow.get("website", ""),
+                "description": ow.get("description", ""),
+            }
+        return _empty_platform_result(platform, brand)
+
+    if platform == "douyin":
+        dy = preprocessed_cache.get("douyin")
+        return {"platform": "douyin", "users": dy if dy else []}
+
+    if platform == "xiaohongshu":
+        xhs = preprocessed_cache.get("xiaohongshu")
+        return {"platform": "xiaohongshu", "users": xhs if xhs else []}
+
+    if platform == "baidu":
+        bd = analysis_cache.get("baidu")
+        if bd:
+            return {
+                "platform": "baidu",
+                "score": bd.get("score", ""),
+                "assessment_grade": bd.get("assessment_grade", ""),
+            }
+        return _empty_platform_result(platform, brand)
+
+    if platform in ("taobao", "jd"):
+        data = preprocessed_cache.get(platform)
+        if data:
+            return {
+                "platform": platform,
+                "name": data.get("name", ""),
+                "profile_url": data.get("profile_url", ""),
+            }
+        return _empty_platform_result(platform, brand)
+
+    return _empty_platform_result(platform, brand)
+
+
+def build_detect_response(brand: str, errors: list | None = None, status: str = "completed") -> dict:
+    """构建对外 detect 接口响应：固定 6 平台全量返回。"""
+    import uuid
+
+    results = [_platform_result_from_cache(p, brand) for p in DETECT_PLATFORM_ORDER]
+    return {
+        "task_id": str(uuid.uuid4())[:8],
+        "brand": brand,
+        "status": status,
+        "results": results,
+        "errors": errors or [],
+    }
+
+
+async def detect_brand_async(keyword: str, platform_keys: list[str] | None = None) -> dict:
+    """同步 detect 入口：搜索完成后一次性返回固定 6 平台聚合结果。"""
+    global _detect_running
+    from config import PLATFORMS, DETECT_TOTAL_TIMEOUT_SECONDS, DETECT_PLATFORM_TIMEOUT_SECONDS
+
+    async with _get_detect_state_lock():
+        if _detect_running:
+            raise DetectBusyError()
+        _detect_running = True
+
+    try:
+        if not platform_keys:
+            platform_keys = [k for k, v in PLATFORMS.items() if v.get("enabled")]
+
+        errors: list[dict] = []
+        try:
+            async with asyncio.timeout(DETECT_TOTAL_TIMEOUT_SECONDS):
+                search_results = await search_platforms_async(
+                    keyword,
+                    platform_keys,
+                    platform_timeout=DETECT_PLATFORM_TIMEOUT_SECONDS,
+                )
+        except TimeoutError:
+            errors.append({
+                "platform": "_global",
+                "message": f"检测总超时（{DETECT_TOTAL_TIMEOUT_SECONDS}秒），已返回已完成平台的结果",
+            })
+            return build_detect_response(keyword, errors, status="partial")
+
+        errors = [
+            {"platform": r["platform"], "message": r["error"]}
+            for r in search_results
+            if r.get("error")
+        ]
+        status = "partial" if errors else "completed"
+        return build_detect_response(keyword, errors, status=status)
+    finally:
+        async with _get_detect_state_lock():
+            _detect_running = False
+
 
 def _preprocess_official_website(users: list[dict]) -> dict | None:
     """官网：提取品牌名、官网URL、简介"""
@@ -190,9 +338,18 @@ def _save_result(platform_key: str, brand: str, result: dict) -> str:
     return str(filepath)
 
 
-async def search_platforms_async(keyword: str, platform_keys: list[str]) -> list[SearchResult]:
-    """异步执行多平台搜索（顺序执行，避免共享 browser_manager 单例时并发抢锁）。"""
+async def search_platforms_async(
+    keyword: str,
+    platform_keys: list[str],
+    platform_timeout: float | None = None,
+) -> list[SearchResult]:
+    """异步执行多平台搜索（顺序执行，避免共享 browser_manager 单例时并发抢锁）。
+
+    Args:
+        platform_timeout: 单平台超时秒数；None 表示不限制（前端 /api/search 用）。
+    """
     global _last_keyword
+    _reset_analysis_caches()
     _last_keyword = keyword
     results: list[SearchResult] = []
 
@@ -210,7 +367,13 @@ async def search_platforms_async(keyword: str, platform_keys: list[str]) -> list
             })
             continue
         try:
-            result = await platform.search(keyword)
+            if platform_timeout:
+                result = await asyncio.wait_for(
+                    platform.search(keyword),
+                    timeout=platform_timeout,
+                )
+            else:
+                result = await platform.search(keyword)
 
             # 按平台执行对应的预处理，并写入缓存
             if not result.get("error") and result.get("users"):
@@ -230,6 +393,17 @@ async def search_platforms_async(keyword: str, platform_keys: list[str]) -> list
             filepath = _save_result(key, keyword, result)
             result["saved_to"] = filepath
             results.append(result)
+        except asyncio.TimeoutError:
+            print(f"[Search] {key} 平台检测超时（{int(platform_timeout)}秒）", flush=True)
+            results.append({
+                "brand": keyword,
+                "platform": key,
+                "platform_name": platform.platform_name,
+                "search_url": "",
+                "total_found": 0,
+                "users": [],
+                "error": f"平台检测超时（{int(platform_timeout)}秒）",
+            })
         except Exception as e:
             results.append({
                 "brand": keyword,

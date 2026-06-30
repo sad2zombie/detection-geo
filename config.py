@@ -107,6 +107,10 @@ BROWSER_LAUNCH_TIMEOUT = 30
 BROWSER_IDLE_TIMEOUT = 300
 BROWSER_LAUNCH_RETRIES = 1
 
+# ----- 对外 detect 接口超时（秒）-----
+DETECT_TOTAL_TIMEOUT_SECONDS = int(os.environ.get("DETECT_TOTAL_TIMEOUT", "900"))      # 整次检测 15 分钟
+DETECT_PLATFORM_TIMEOUT_SECONDS = int(os.environ.get("DETECT_PLATFORM_TIMEOUT", "180"))  # 单平台 3 分钟
+
 # ----- 品牌官网检测（一级信源）配置 -----
 # LLM API 配置（OpenAI 兼容接口）
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")

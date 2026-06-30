@@ -111,6 +111,34 @@ async def api_auth_login(platform_key: str, request: Request):
     return JSONResponse(result)
 
 
+# ---------- API: 对外 detect（同步，固定 6 平台全量返回）----------
+@app.post("/api/detect")
+async def api_detect(request: Request, body: dict):
+    """品牌检测统一入口：搜索完成后一次性返回聚合结果。
+
+    请求体::
+        {"keyword": "西屋", "platforms": ["douyin", ...]}  # platforms 可选，不传默认全部
+
+    响应体::
+        {"task_id", "brand", "status", "results": [固定6平台], "errors": []}
+    """
+    keyword = body.get("keyword", "").strip()
+    platform_keys = body.get("platforms") or []
+
+    if not keyword:
+        return JSONResponse({"error": "关键词不能为空"}, status_code=400)
+
+    from core.search_engine import detect_brand_async, DetectBusyError
+    try:
+        result = await detect_brand_async(keyword, platform_keys or None)
+    except DetectBusyError:
+        return JSONResponse(
+            {"error": "检测任务进行中，请稍后再试"},
+            status_code=409,
+        )
+    return JSONResponse(result)
+
+
 # ---------- API: 搜索 ----------
 @app.post("/api/search")
 async def api_search(request: Request, body: dict):

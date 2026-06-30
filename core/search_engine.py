@@ -25,6 +25,11 @@ def _get_detect_state_lock() -> asyncio.Lock:
     return _detect_state_lock
 
 
+def is_detect_busy() -> bool:
+    """是否有检测流程正在执行（/api/detect、任务管理、消费拉取共用）。"""
+    return _detect_running
+
+
 def _parse_follower_count(raw: str | int | float | None) -> float | None:
     """解析粉丝数字符串，返回浮点数或 None（无法解析时）"""
     if raw is None:

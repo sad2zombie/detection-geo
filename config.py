@@ -39,6 +39,21 @@ if _DETECTION_DATA_DIR_ENV:
     DATA_DIR = Path(_DETECTION_DATA_DIR_ENV)
 else:
     DATA_DIR = ROOT_DIR / "data"
+
+# ----- 应用版本（打包时由 Electron 注入 DETECTION_APP_VERSION）-----
+def _read_package_version() -> str:
+    try:
+        import json
+        pkg = ROOT_DIR / "package.json"
+        if pkg.is_file():
+            with open(pkg, "r", encoding="utf-8") as f:
+                return str(json.load(f).get("version") or "dev")
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
+    return "dev"
+
+
+APP_VERSION = os.environ.get("DETECTION_APP_VERSION", "").strip() or _read_package_version()
 COOKIE_DIR = DATA_DIR / "cookies"
 RESULTS_DIR = DATA_DIR / "results"
 
@@ -125,3 +140,10 @@ BOCHA_API_KEY = os.environ.get("BOCHA_API_KEY", "")
 
 # 品牌查询开关（设为 False 可跳过一级信源检测）
 BRAND_SEARCH_ENABLED = os.environ.get("BRAND_SEARCH_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")
+
+# ----- 消费任务轮询（从远端服务器拉取任务并回传结果）-----
+CONSUMPTION_FETCH_URL = os.environ.get("CONSUMPTION_FETCH_URL", "").strip()
+CONSUMPTION_CALLBACK_URL = os.environ.get("CONSUMPTION_CALLBACK_URL", "").strip()
+CONSUMPTION_POLL_INTERVAL = max(3, int(os.environ.get("CONSUMPTION_POLL_INTERVAL", "10")))
+_CONSUMPTION_POLL_ENV = os.environ.get("CONSUMPTION_POLL_ENABLED", "true").strip().lower()
+CONSUMPTION_POLL_ENABLED = _CONSUMPTION_POLL_ENV in ("1", "true", "yes", "on")

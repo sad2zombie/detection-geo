@@ -1,9 +1,9 @@
 {
   "name": "brand-detector",
   "version": "1.0.0",
-  "description": "品牌认证检测系统",
+  "description": "GEO信源检测系统",
   "main": "main.js",
-  "productName": "品牌检测",
+  "productName": "GEO信源检测",
   "asar": false,
   "scripts": {
     "start": "chcp 65001 >NUL && electron .",
@@ -20,7 +20,7 @@
   "dependencies": {},
   "build": {
     "appId": "com.brand.detector",
-    "productName": "品牌检测",
+    "productName": "GEO信源检测",
     "directories": {
       "output": "release"
     },

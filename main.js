@@ -103,6 +103,7 @@ function createPyProc(frontendPath) {
     PYTHONUTF8: "1",
     PROJECT_ROOT: projectRoot,
     DETECTION_DATA_DIR: dataDir,
+    DETECTION_APP_VERSION: require("./package.json").version || "1.0.0",
   };
   const spawnOpts = app.isPackaged
     ? { env, stdio: ["ignore", "pipe", "pipe"], detached: false, windowsHide: true }

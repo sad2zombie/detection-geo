@@ -15,6 +15,26 @@ import config
 from core.auth_manager import AuthManager
 
 
+async def _consumption_poll_loop():
+    """后台定时向服务器拉取消费任务。"""
+    if not config.CONSUMPTION_POLL_ENABLED:
+        return
+    if not config.CONSUMPTION_FETCH_URL or not config.CONSUMPTION_CALLBACK_URL:
+        return
+    from core.consumption_worker import poll_once
+
+    print(
+        f"[消费轮询] 已启动，间隔 {config.CONSUMPTION_POLL_INTERVAL}s",
+        flush=True,
+    )
+    while True:
+        try:
+            await poll_once()
+        except Exception as e:
+            print(f"[消费轮询] 异常: {e}", flush=True)
+        await asyncio.sleep(config.CONSUMPTION_POLL_INTERVAL)
+
+
 # ---------- 启动时自动检测所有平台登录态（方案 A：失败静默） ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,6 +43,7 @@ async def lifespan(app: FastAPI):
     if enabled:
         print(f"[启动] 自动检测 {len(enabled)} 个平台登录状态…", flush=True)
         asyncio.create_task(_initial_auth_check(enabled))
+    asyncio.create_task(_consumption_poll_loop())
     yield
     # 退出由 atexit._shutdown_browser_manager 兜底
 
@@ -65,6 +86,16 @@ async def index(request: Request):
 @app.get("/tasks", response_class=HTMLResponse)
 async def tasks_page(request: Request):
     return templates.TemplateResponse(request, "tasks.html", {})
+
+
+@app.get("/consumption", response_class=HTMLResponse)
+async def consumption_page(request: Request):
+    return templates.TemplateResponse(request, "consumption.html", {})
+
+
+@app.get("/terminal", response_class=HTMLResponse)
+async def terminal_page(request: Request):
+    return templates.TemplateResponse(request, "terminal.html", {})
 
 
 # ---------- API: 登录状态 ----------
@@ -174,12 +205,11 @@ async def api_detect(request: Request, body: dict):
 
 # ---------- API: 任务管理 ----------
 @app.get("/api/tasks")
-async def api_tasks_list(task_id: str = ""):
-    """任务列表；传 task_id 时精确查询。"""
+async def api_tasks_list(task_id: str = "", keyword: str = ""):
+    """任务列表；task_id 精确匹配，keyword 品牌名包含匹配，可同时传合并筛选。"""
     from core.task_manager import list_tasks
 
-    q = task_id.strip()
-    items = list_tasks(q or None)
+    items = list_tasks(task_id.strip() or None, keyword.strip() or None)
     return JSONResponse({"list": items, "total": len(items)})
 
 
@@ -206,6 +236,59 @@ async def api_task_delete(task_id: str):
         return JSONResponse({"error": "任务不存在"}, status_code=404)
     except TaskDeleteError as e:
         return JSONResponse({"error": str(e)}, status_code=409)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+# ---------- API: 消费日志 ----------
+@app.get("/api/consumption/logs")
+async def api_consumption_logs(task_id: str = "", limit: int = 200):
+    """消费日志列表（时间、任务 ID、状态）。"""
+    from core.consumption_log import list_logs
+
+    items = list_logs(task_id.strip() or None, limit=limit)
+    return JSONResponse({"list": items, "total": len(items)})
+
+
+@app.get("/api/consumption/status")
+async def api_consumption_status():
+    """轮询配置状态。"""
+    from core.consumption_worker import get_poll_status
+
+    return JSONResponse(get_poll_status())
+
+
+@app.post("/api/consumption/poll")
+async def api_consumption_poll():
+    """手动触发一次拉取（与后台轮询逻辑相同）。"""
+    from core.consumption_worker import poll_once
+
+    result = await poll_once()
+    return JSONResponse(result)
+
+
+# ---------- API: 终端信息 ----------
+@app.get("/api/terminal")
+async def api_terminal_info():
+    """本机终端 ID、设备名称、版本号。"""
+    from core.terminal_info import get_terminal_info
+
+    return JSONResponse(get_terminal_info())
+
+
+@app.put("/api/terminal")
+async def api_terminal_update(request: Request):
+    """更新设备名称。"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    device_name = (body.get("device_name") or "").strip()
+
+    from core.terminal_info import update_device_name
+
+    try:
+        return JSONResponse(update_device_name(device_name))
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 

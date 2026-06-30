@@ -62,6 +62,11 @@ async def index(request: Request):
     })
 
 
+@app.get("/tasks", response_class=HTMLResponse)
+async def tasks_page(request: Request):
+    return templates.TemplateResponse(request, "tasks.html", {})
+
+
 # ---------- API: 登录状态 ----------
 @app.get("/api/auth/status")
 async def api_auth_status(refresh: bool = False):
@@ -117,26 +122,92 @@ async def api_detect(request: Request, body: dict):
     """品牌检测统一入口：搜索完成后一次性返回聚合结果。
 
     请求体::
-        {"keyword": "西屋", "platforms": ["douyin", ...]}  # platforms 可选，不传默认全部
+        {"task_id": "...", "keyword": "西屋", "platforms": [...]}  # platforms 可选
 
     响应体::
         {"task_id", "brand", "status", "results": [固定6平台], "errors": []}
     """
+    task_id = (body.get("task_id") or "").strip()
     keyword = body.get("keyword", "").strip()
     platform_keys = body.get("platforms") or []
 
+    if not task_id:
+        return JSONResponse({"error": "task_id 不能为空"}, status_code=400)
     if not keyword:
         return JSONResponse({"error": "关键词不能为空"}, status_code=400)
 
+    from config import PLATFORMS
+    from core.task_manager import (
+        TaskDuplicateError,
+        complete_task,
+        create_task,
+        fail_task,
+        set_task_running,
+    )
     from core.search_engine import detect_brand_async, DetectBusyError
+
+    if not platform_keys:
+        platform_keys = [k for k, v in PLATFORMS.items() if v.get("enabled")]
+
     try:
-        result = await detect_brand_async(keyword, platform_keys or None)
+        create_task(task_id, keyword, platform_keys)
+    except TaskDuplicateError as e:
+        return JSONResponse({"error": str(e)}, status_code=409)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    set_task_running(task_id)
+    try:
+        result = await detect_brand_async(keyword, platform_keys, task_id=task_id)
+        complete_task(task_id, result)
+        return JSONResponse(result)
     except DetectBusyError:
+        fail_task(task_id, "检测任务进行中，请稍后再试")
         return JSONResponse(
             {"error": "检测任务进行中，请稍后再试"},
             status_code=409,
         )
-    return JSONResponse(result)
+    except Exception as e:
+        fail_task(task_id, str(e))
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ---------- API: 任务管理 ----------
+@app.get("/api/tasks")
+async def api_tasks_list(task_id: str = ""):
+    """任务列表；传 task_id 时精确查询。"""
+    from core.task_manager import list_tasks
+
+    q = task_id.strip()
+    items = list_tasks(q or None)
+    return JSONResponse({"list": items, "total": len(items)})
+
+
+@app.get("/api/tasks/{task_id}")
+async def api_task_detail(task_id: str):
+    """单任务详情（含完整 result）。"""
+    from core.task_manager import get_task
+
+    task = get_task(task_id)
+    if not task:
+        return JSONResponse({"error": "任务不存在"}, status_code=404)
+    return JSONResponse(task)
+
+
+@app.delete("/api/tasks/{task_id}")
+async def api_task_delete(task_id: str):
+    """删除任务记录。"""
+    from core.task_manager import TaskDeleteError, delete_task
+
+    try:
+        delete_task(task_id)
+        return JSONResponse({"ok": True})
+    except KeyError:
+        return JSONResponse({"error": "任务不存在"}, status_code=404)
+    except TaskDeleteError as e:
+        return JSONResponse({"error": str(e)}, status_code=409)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
 
 
 # ---------- API: 搜索 ----------

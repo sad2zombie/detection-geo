@@ -220,6 +220,7 @@ def _platform_result_from_cache(platform: str, brand: str) -> dict:
                 "brand_name": ow.get("brand_name", brand),
                 "website": ow.get("website", ""),
                 "description": ow.get("description", ""),
+                "source": ow.get("source", ""),
             }
         return _empty_platform_result(platform, brand)
 
@@ -254,13 +255,16 @@ def _platform_result_from_cache(platform: str, brand: str) -> dict:
     return _empty_platform_result(platform, brand)
 
 
-def build_detect_response(brand: str, errors: list | None = None, status: str = "completed") -> dict:
+def build_detect_response(
+    brand: str,
+    task_id: str,
+    errors: list | None = None,
+    status: str = "completed",
+) -> dict:
     """构建对外 detect 接口响应：固定 6 平台全量返回。"""
-    import uuid
-
     results = [_platform_result_from_cache(p, brand) for p in DETECT_PLATFORM_ORDER]
     return {
-        "task_id": str(uuid.uuid4())[:8],
+        "task_id": task_id,
         "brand": brand,
         "status": status,
         "results": results,
@@ -268,7 +272,11 @@ def build_detect_response(brand: str, errors: list | None = None, status: str = 
     }
 
 
-async def detect_brand_async(keyword: str, platform_keys: list[str] | None = None) -> dict:
+async def detect_brand_async(
+    keyword: str,
+    platform_keys: list[str] | None = None,
+    task_id: str = "",
+) -> dict:
     """同步 detect 入口：搜索完成后一次性返回固定 6 平台聚合结果。"""
     global _detect_running
     from config import PLATFORMS, DETECT_TOTAL_TIMEOUT_SECONDS, DETECT_PLATFORM_TIMEOUT_SECONDS
@@ -295,7 +303,7 @@ async def detect_brand_async(keyword: str, platform_keys: list[str] | None = Non
                 "platform": "_global",
                 "message": f"检测总超时（{DETECT_TOTAL_TIMEOUT_SECONDS}秒），已返回已完成平台的结果",
             })
-            return build_detect_response(keyword, errors, status="partial")
+            return build_detect_response(keyword, task_id, errors, status="partial")
 
         errors = [
             {"platform": r["platform"], "message": r["error"]}
@@ -303,7 +311,7 @@ async def detect_brand_async(keyword: str, platform_keys: list[str] | None = Non
             if r.get("error")
         ]
         status = "partial" if errors else "completed"
-        return build_detect_response(keyword, errors, status=status)
+        return build_detect_response(keyword, task_id, errors, status=status)
     finally:
         async with _get_detect_state_lock():
             _detect_running = False
@@ -319,6 +327,7 @@ def _preprocess_official_website(users: list[dict]) -> dict | None:
         "brand_name": u.get("name", ""),
         "website": u.get("profile_url", ""),
         "description": u.get("description", ""),
+        "source": u.get("source", ""),
     }
 
 

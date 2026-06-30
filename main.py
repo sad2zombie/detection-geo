@@ -59,7 +59,8 @@ elif (_project_root / ".env").is_file():
 
 # 创建必要的数据目录
 from config import DATA_DIR, COOKIE_DIR, RESULTS_DIR
-for d in [DATA_DIR, COOKIE_DIR, RESULTS_DIR]:
+from core.task_manager import TASKS_DIR
+for d in [DATA_DIR, COOKIE_DIR, RESULTS_DIR, TASKS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 # 注册进程退出清理（双保险）

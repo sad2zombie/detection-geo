@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>任务管理 // GEO TASK MANAGEMENT</title>
+
+    <link rel="stylesheet" href="/static/style.css?v=10">
+
+</head>
+
+<body>
+
+    <script src="/static/bg-theme.js?v=1"></script>
+
+    <div class="bg-layer bg-gradient"></div>
+
+    <div class="bg-layer bg-grid"></div>
+
+    <div class="bg-layer bg-scanlines"></div>
+
+    <div class="top-bar"></div>
+
+    <div class="corner-deco tl"></div>
+
+    <div class="corner-deco tr"></div>
+
+    <div class="corner-deco bl"></div>
+
+    <div class="corner-deco br"></div>
+
+
+
+    <div class="container">
+
+        <header>
+
+            <div class="logo-line">
+
+                <div class="logo-icon">&#128203;</div>
+
+                <h1>任务管理</h1>
+
+            </div>
+
+            <p class="subtitle">GEO SOURCE TASK MONITOR</p>
+
+            <nav class="top-nav">
+                <a href="/">品牌检测</a>
+                <a href="/tasks" class="active">任务管理</a>
+                <a href="/consumption">消费日志</a>
+                <a href="/terminal">终端信息</a>
+            </nav>
+
+        </header>
+
+
+
+        <section class="card">
+
+            <div class="card-corner tl"></div>
+
+            <div class="card-corner tr"></div>
+
+            <div class="card-corner bl"></div>
+
+            <div class="card-corner br"></div>
+
+            <div class="task-list-header">
+                <h2>&#9654; 任务列表</h2>
+                <div class="task-list-actions">
+                    <button type="button" class="btn btn-outline btn-sm" id="btn-open-search-modal">任务查询</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-open-create-modal">新建任务</button>
+                </div>
+            </div>
+
+            <div class="task-filter-bar" id="task-filter-bar" style="display:none;">
+                <span id="task-filter-label"></span>
+                <button type="button" class="btn btn-outline btn-sm" id="btn-clear-search">清除筛选</button>
+            </div>
+
+            <div class="task-table-wrap">
+                <table class="task-table" id="task-table">
+
+                    <thead>
+
+                        <tr>
+
+                            <th>任务 ID</th>
+
+                            <th>品牌</th>
+
+                            <th>状态</th>
+
+                            <th>创建时间</th>
+
+                            <th>查看</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="task-tbody">
+                        <tr><td colspan="6" class="task-empty">加载中…</td></tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+
+        <section class="card" id="task-detail-section" style="display:none;">
+
+            <div class="card-corner tl"></div>
+
+            <div class="card-corner tr"></div>
+
+            <div class="card-corner bl"></div>
+
+            <div class="card-corner br"></div>
+
+            <h2>&#9670; 品牌匹配分析</h2>
+
+            <div id="task-analysis-report"></div>
+
+        </section>
+
+    </div>
+
+
+
+    <!-- 新建任务弹窗 -->
+
+    <div class="modal-overlay" id="create-task-modal" style="display:none;" aria-hidden="true">
+
+        <div class="modal-card" role="dialog" aria-labelledby="create-modal-title">
+
+            <div class="modal-header">
+
+                <h3 id="create-modal-title">新建任务</h3>
+
+                <button type="button" class="modal-close" id="btn-close-create-modal" aria-label="关闭">&times;</button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <div class="modal-field">
+
+                    <label class="modal-label" for="modal-keyword">品牌</label>
+
+                    <input type="text" id="modal-keyword" placeholder="请输入品牌关键词" maxlength="20">
+
+                </div>
+
+                <div class="modal-field">
+
+                    <label class="modal-label">平台</label>
+
+                    <div class="platform-dropdown" id="platform-dropdown">
+
+                        <button type="button" class="platform-dropdown-trigger" id="platform-dropdown-trigger">
+
+                            <span id="platform-dropdown-label">全部平台</span>
+
+                            <span class="dropdown-arrow">&#9662;</span>
+
+                        </button>
+
+                        <div class="platform-dropdown-panel" id="platform-dropdown-panel" style="display:none;">
+
+                            <div class="platform-dropdown-list" id="platform-dropdown-list"></div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div id="modal-create-msg" class="modal-msg" style="display:none;"></div>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button type="button" class="btn btn-outline" id="btn-cancel-create">取消</button>
+
+                <button type="button" class="btn btn-primary" id="btn-create-task">创建并执行</button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- 任务查询弹窗 -->
+    <div class="modal-overlay" id="search-task-modal" style="display:none;" aria-hidden="true">
+        <div class="modal-card modal-card-sm" role="dialog" aria-labelledby="search-modal-title">
+            <div class="modal-header">
+                <h3 id="search-modal-title">任务查询</h3>
+                <button type="button" class="modal-close" id="btn-close-search-modal" aria-label="关闭">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-hint-text">可单独或同时填写，多个条件将合并筛选（同时满足）。</p>
+                <div class="modal-field">
+                    <label class="modal-label" for="search-task-id-input">任务 ID</label>
+                    <input type="text" id="search-task-id-input" placeholder="精确匹配任务 ID（可选）">
+                </div>
+                <div class="modal-field">
+                    <label class="modal-label" for="search-task-keyword-input">品牌名</label>
+                    <input type="text" id="search-task-keyword-input" placeholder="品牌名包含匹配（可选）" maxlength="20">
+                </div>
+                <div id="search-task-msg" class="modal-msg" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" id="btn-cancel-search">取消</button>
+                <button type="button" class="btn btn-primary" id="btn-submit-search">查询</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div class="modal-overlay" id="delete-task-modal" style="display:none;" aria-hidden="true">
+        <div class="modal-card modal-card-sm" role="dialog" aria-labelledby="delete-modal-title">
+            <div class="modal-header">
+                <h3 id="delete-modal-title">确认删除</h3>
+                <button type="button" class="modal-close" id="btn-close-delete-modal" aria-label="关闭">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-confirm-text" id="delete-confirm-text">确定要删除该任务吗？此操作不可恢复。</p>
+                <div id="delete-task-msg" class="modal-msg" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" id="btn-cancel-delete">取消</button>
+                <button type="button" class="btn btn-danger" id="btn-confirm-delete">删除</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/analysis-render.js?v=2"></script>
+    <script src="/static/tasks.js?v=11"></script>
+
+</body>
+
+</html>
+

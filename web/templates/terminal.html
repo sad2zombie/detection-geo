@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>终端信息 // GEO TERMINAL INFO</title>
+    <link rel="stylesheet" href="/static/style.css?v=10">
+</head>
+<body>
+    <script src="/static/bg-theme.js?v=1"></script>
+    <div class="bg-layer bg-gradient"></div>
+    <div class="bg-layer bg-grid"></div>
+    <div class="bg-layer bg-scanlines"></div>
+    <div class="top-bar"></div>
+    <div class="corner-deco tl"></div>
+    <div class="corner-deco tr"></div>
+    <div class="corner-deco bl"></div>
+    <div class="corner-deco br"></div>
+
+    <div class="container">
+        <header>
+            <div class="logo-line">
+                <div class="logo-icon">&#128421;</div>
+                <h1>终端信息</h1>
+            </div>
+            <p class="subtitle">GEO TERMINAL DEVICE PROFILE</p>
+            <nav class="top-nav">
+                <a href="/">品牌检测</a>
+                <a href="/tasks">任务管理</a>
+                <a href="/consumption">消费日志</a>
+                <a href="/terminal" class="active">终端信息</a>
+            </nav>
+        </header>
+
+        <section class="card">
+            <div class="card-corner tl"></div>
+            <div class="card-corner tr"></div>
+            <div class="card-corner bl"></div>
+            <div class="card-corner br"></div>
+            <h2>&#9654; 本机终端</h2>
+            <div id="terminal-loading" class="loading">
+                <span class="spinner"></span>加载中...
+            </div>
+            <div id="terminal-content" class="terminal-info-panel" style="display:none;">
+                <div class="terminal-info-row">
+                    <span class="terminal-info-label">终端 ID</span>
+                    <div class="terminal-info-value terminal-id-value" id="terminal-id">-</div>
+                    <p class="terminal-info-hint">本机唯一标识，首次启动时自动生成，不可修改。</p>
+                </div>
+                <div class="terminal-info-row">
+                    <span class="terminal-info-label">设备名称</span>
+                    <div class="terminal-device-edit">
+                        <input type="text" id="device-name-input" maxlength="64" placeholder="请输入设备名称">
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-save-device-name">保存</button>
+                    </div>
+                    <p class="terminal-info-hint">可自定义名称，便于在多台设备中区分。</p>
+                    <div id="device-name-msg" class="terminal-inline-msg" style="display:none;"></div>
+                </div>
+                <div class="terminal-info-row">
+                    <span class="terminal-info-label">版本信息</span>
+                    <div class="terminal-info-value" id="app-version">-</div>
+                    <p class="terminal-info-hint">当前安装包版本号。</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/terminal.js?v=1"></script>
+</body>
+</html>

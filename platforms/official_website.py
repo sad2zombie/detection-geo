@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""官网平台（一级信源）—— HTTP搜索 + LLM分析，不使用浏览器。
+"""官网平台（一级信源）—— 分平台搜索 + 规则提取 + 大模型兜底，不使用浏览器。
 
 继承 BasePlatform 但覆盖所有浏览器相关方法，
 直接委托 core.brand_search.search_brand() 执行查询。
@@ -23,7 +23,7 @@ class OfficialWebsitePlatform(BasePlatform):
             "platform": self.platform_key,
             "platform_name": self.platform_name,
             "isLoggedIn": True,
-            "note": "HTTP+LLM 查询，无需浏览器登录",
+            "note": "分平台搜索 + 规则提取，无需浏览器登录",
         }
 
     async def login(self) -> bool:
@@ -61,5 +61,20 @@ class OfficialWebsitePlatform(BasePlatform):
             "search_url": result.get("website", "") if has_website else "",
             "total_found": 1 if has_website else 0,
             "users": users,
-            "error": result.get("error", ""),
+            "error": result.get("error", "") if has_website else "",
         }
+
+    async def search(self, keyword: str) -> SearchResult:
+        """官网查询只执行一次，不走基类重试框架（避免误报「重试N次」）。"""
+        try:
+            return await self._do_search(keyword)
+        except Exception as e:
+            return {
+                "brand": keyword,
+                "platform": self.platform_key,
+                "platform_name": self.platform_name,
+                "search_url": "",
+                "total_found": 0,
+                "users": [],
+                "error": str(e),
+            }

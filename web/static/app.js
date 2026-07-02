@@ -324,7 +324,7 @@ async function startSearch() {
     const brandAnalysisResult = document.getElementById("brand-analysis-result");
 
     progressEl.style.display = "block";
-    progressEl.innerHTML = '<span class="loading"><span class="spinner"></span>正在打开浏览器搜索，请稍候...</span>';
+    progressEl.innerHTML = '<span class="loading"><span class="spinner"></span>正在搜索...</span>';
     resultSection.style.display = "none";
     analyzeRow.style.display = "none";
     searchResults = [];
@@ -381,6 +381,9 @@ function renderResults(results) {
         const visibleUsers = allUsers.slice(0, 5);
         const hiddenCount = allUsers.length - 5;
         const error = r.error ? `<div class="progress-item error">⚠️ ${r.error}</div>` : "";
+        const emptyText = r.platform === "official_website"
+            ? "未找到官方网站"
+            : "暂无搜索结果";
         const userCards = visibleUsers.map(u => renderUserCard(u, r.platform || "")).join("");
         const platformKey = (r.platform || '').replace(/[^a-z0-9]/gi, '_');
         const hiddenSection = hiddenCount > 0
@@ -396,7 +399,7 @@ function renderResults(results) {
             <div class="platform-result">
                 <h3>${r.platform_name || r.platform} (${r.total_found}条结果)</h3>
                 ${error}
-                ${userCards || '<div class="user-card" style="color:var(--text-secondary)">暂无搜索结果</div>'}
+                ${userCards || `<div class="user-card" style="color:var(--text-secondary)">${emptyText}</div>`}
                 ${hiddenSection}
             </div>
         `;

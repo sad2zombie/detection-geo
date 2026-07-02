@@ -177,6 +177,6 @@ CONSUMPTION_POLL_ENABLED = _CONSUMPTION_POLL_ENV in ("1", "true", "yes", "on")
 
 # ----- Kafka 结果回传（明文，仅出站）-----
 KAFKA_BOOTSTRAP_SERVERS = os.environ.get(
-    "KAFKA_BOOTSTRAP_SERVERS", "120.24.174.129:9094"
+    "KAFKA_BOOTSTRAP_SERVERS", "8.129.48.181:9094,120.24.45.182:9094,47.112.155.69:9094"
 ).strip()
 KAFKA_RESULT_TOPIC = os.environ.get("KAFKA_RESULT_TOPIC", "").strip()

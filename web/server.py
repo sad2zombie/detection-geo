@@ -19,7 +19,7 @@ async def _consumption_poll_loop():
     """后台定时向服务器拉取消费任务。"""
     if not config.CONSUMPTION_POLL_ENABLED:
         return
-    if not config.CONSUMPTION_FETCH_URL or not config.CONSUMPTION_CALLBACK_URL:
+    if not config.CONSUMPTION_FETCH_URL or not config.KAFKA_RESULT_TOPIC:
         return
     from core.consumption_worker import poll_once
 
@@ -45,7 +45,8 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(_initial_auth_check(enabled))
     asyncio.create_task(_consumption_poll_loop())
     yield
-    # 退出由 atexit._shutdown_browser_manager 兜底
+    from core.kafka_producer import shutdown_producer
+    await shutdown_producer()
 
 
 async def _initial_auth_check(platforms):
@@ -79,7 +80,7 @@ auth_manager = AuthManager()
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(request, "index.html", {
-        "platforms": config.PLATFORMS,
+        "platforms": config.get_enabled_platforms(),
     })
 
 
@@ -147,7 +148,7 @@ async def api_auth_login(platform_key: str, request: Request):
     return JSONResponse(result)
 
 
-# ---------- API: 对外 detect（同步，固定 6 平台全量返回）----------
+# ---------- API: 对外 detect（同步，固定启用平台全量返回）----------
 @app.post("/api/detect")
 async def api_detect(request: Request, body: dict):
     """品牌检测统一入口：搜索完成后一次性返回聚合结果。
@@ -156,18 +157,17 @@ async def api_detect(request: Request, body: dict):
         {"task_id": "...", "keyword": "西屋", "platforms": [...]}  # platforms 可选
 
     响应体::
-        {"task_id", "brand", "status", "results": [固定6平台], "errors": []}
+        {"task_id", "brand", "status", "results": [固定4平台], "errors": []}
     """
     task_id = (body.get("task_id") or "").strip()
     keyword = body.get("keyword", "").strip()
-    platform_keys = body.get("platforms") or []
+    platform_keys = config.filter_platform_keys(body.get("platforms") or [])
 
     if not task_id:
         return JSONResponse({"error": "task_id 不能为空"}, status_code=400)
     if not keyword:
         return JSONResponse({"error": "关键词不能为空"}, status_code=400)
 
-    from config import PLATFORMS
     from core.task_manager import (
         TaskDuplicateError,
         complete_task,
@@ -176,9 +176,6 @@ async def api_detect(request: Request, body: dict):
         set_task_running,
     )
     from core.search_engine import detect_brand_async, DetectBusyError
-
-    if not platform_keys:
-        platform_keys = [k for k, v in PLATFORMS.items() if v.get("enabled")]
 
     try:
         create_task(task_id, keyword, platform_keys)
@@ -303,7 +300,9 @@ async def api_search(request: Request, body: dict):
     if not keyword:
         return JSONResponse({"error": "关键词不能为空"}, status_code=400)
     if not platform_keys:
-        platform_keys = [k for k, v in config.PLATFORMS.items() if v.get("enabled")]
+        platform_keys = list(config.ENABLED_PLATFORM_KEYS)
+    else:
+        platform_keys = config.filter_platform_keys(platform_keys)
 
     from core.search_engine import search_platforms_async
     results = await search_platforms_async(keyword, platform_keys)
@@ -338,7 +337,7 @@ async def api_brand_website(request: Request):
 # ---------- API: 平台列表 ----------
 @app.get("/api/platforms")
 async def api_platforms():
-    return JSONResponse(config.PLATFORMS)
+    return JSONResponse(config.get_enabled_platforms())
 
 
 # ---------- 入口 ----------

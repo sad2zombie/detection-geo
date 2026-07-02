@@ -60,6 +60,7 @@ async function loadPlatformMeta() {
         const data = result.data || {};
         window._platforms = {};
         for (const [key, meta] of Object.entries(data)) {
+            if (meta.enabled === false) continue;
             window._platforms[key] = {
                 key,
                 name: meta.name || key,
@@ -211,7 +212,8 @@ function renderPlatformCards(platforms) {
     // 过滤掉不需要登录的平台（百度、官网）
     const filtered = platforms.filter(p => {
         const meta = window._platforms[p.platform];
-        return meta ? meta.requires_login !== false : true;
+        if (!meta) return false;
+        return meta.requires_login !== false;
     });
     container.innerHTML = filtered.map(p => {
         const loggedIn = Boolean(p.isLoggedIn);

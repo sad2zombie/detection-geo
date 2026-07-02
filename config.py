@@ -87,13 +87,13 @@ PLATFORMS = {
     "taobao": {
         "name": "淘宝",
         "icon": "🛒",
-        "enabled": True,
+        "enabled": False,
         "requires_login": True,
     },
     "jd": {
         "name": "京东",
         "icon": "📦",
-        "enabled": True,
+        "enabled": False,
         "requires_login": True,
     },
     "official_website": {
@@ -141,9 +141,42 @@ BOCHA_API_KEY = os.environ.get("BOCHA_API_KEY", "")
 # 品牌查询开关（设为 False 可跳过一级信源检测）
 BRAND_SEARCH_ENABLED = os.environ.get("BRAND_SEARCH_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")
 
-# ----- 消费任务轮询（从远端服务器拉取任务并回传结果）-----
+# ----- 启用平台顺序（对外 detect / Kafka 结果固定顺序）-----
+PLATFORM_ORDER = (
+    "official_website",
+    "douyin",
+    "xiaohongshu",
+    "baidu",
+    "taobao",
+    "jd",
+)
+ENABLED_PLATFORM_KEYS = tuple(
+    k for k in PLATFORM_ORDER if PLATFORMS.get(k, {}).get("enabled")
+)
+
+
+def filter_platform_keys(platform_keys: list | None) -> list[str]:
+    """过滤为已启用平台；忽略 jd/taobao 等未启用项；空列表时返回全部启用平台。"""
+    allowed = set(ENABLED_PLATFORM_KEYS)
+    if not platform_keys:
+        return list(ENABLED_PLATFORM_KEYS)
+    filtered = [k for k in platform_keys if k in allowed]
+    return filtered if filtered else list(ENABLED_PLATFORM_KEYS)
+
+
+def get_enabled_platforms() -> dict:
+    """返回已启用平台元数据（供前端展示与 /api/platforms）。"""
+    return {k: PLATFORMS[k] for k in ENABLED_PLATFORM_KEYS}
+
+
+# ----- 消费任务轮询（HTTP 拉取任务，Kafka 回传结果）-----
 CONSUMPTION_FETCH_URL = os.environ.get("CONSUMPTION_FETCH_URL", "").strip()
-CONSUMPTION_CALLBACK_URL = os.environ.get("CONSUMPTION_CALLBACK_URL", "").strip()
 CONSUMPTION_POLL_INTERVAL = max(3, int(os.environ.get("CONSUMPTION_POLL_INTERVAL", "10")))
 _CONSUMPTION_POLL_ENV = os.environ.get("CONSUMPTION_POLL_ENABLED", "true").strip().lower()
 CONSUMPTION_POLL_ENABLED = _CONSUMPTION_POLL_ENV in ("1", "true", "yes", "on")
+
+# ----- Kafka 结果回传（明文，仅出站）-----
+KAFKA_BOOTSTRAP_SERVERS = os.environ.get(
+    "KAFKA_BOOTSTRAP_SERVERS", "120.24.174.129:9094"
+).strip()
+KAFKA_RESULT_TOPIC = os.environ.get("KAFKA_RESULT_TOPIC", "").strip()

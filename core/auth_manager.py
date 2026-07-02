@@ -28,10 +28,15 @@ class AuthManager:
         return self._instances[key]
 
     def get_cached_status(self, platform_key: str | None = None):
-        """读缓存（不启浏览器）。platform_key=None → 全部。"""
+        """读缓存（不启浏览器）。platform_key=None → 全部已启用平台。"""
         if platform_key is not None:
             return self._status_cache.get(platform_key)
-        return list(self._status_cache.values())
+        from config import ENABLED_PLATFORM_KEYS
+        return [
+            self._status_cache[k]
+            for k in ENABLED_PLATFORM_KEYS
+            if k in self._status_cache
+        ]
 
     async def check_status(self, platform_key: str) -> dict:
         """检查指定平台登录状态（异步），结果写入 _status_cache。
@@ -71,11 +76,11 @@ class AuthManager:
         return result
 
     async def check_all_status(self) -> list[dict]:
-        """检查所有平台登录状态（顺序执行：避免一次性起多个无头 chromium 抢资源）。"""
-        from config import PLATFORMS
+        """检查所有已启用平台登录状态（顺序执行：避免一次性起多个无头 chromium 抢资源）。"""
+        from config import ENABLED_PLATFORM_KEYS
 
         results: list[dict] = []
-        for key in PLATFORMS:
+        for key in ENABLED_PLATFORM_KEYS:
             results.append(await self.check_status(key))
         return results
 

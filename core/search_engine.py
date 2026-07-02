@@ -7,7 +7,7 @@ from datetime import datetime
 
 from platforms import get_platform
 from platforms.base import SearchResult
-from config import RESULTS_DIR
+from config import RESULTS_DIR, ENABLED_PLATFORM_KEYS, filter_platform_keys
 
 
 class DetectBusyError(Exception):
@@ -151,13 +151,13 @@ def analyze_brand_result(brand: str, users: list[dict]) -> dict:
     score = round(matched / total * 100) if total > 0 else 0
 
     if score >= 90:
-        grade = "高"
+        grade = "优"
     elif score >= 75:
-        grade = "中高"
+        grade = "良"
     elif score >= 60:
         grade = "中"
     else:
-        grade = "低"
+        grade = "差"
 
     return {
         "platform": "baidu",
@@ -181,15 +181,8 @@ analysis_cache: dict[str, dict] = {}
 # 一级信源：品牌官网查询结果
 brand_website_cache: dict | None = None
 
-# 对外 detect 接口固定返回的平台及顺序
-DETECT_PLATFORM_ORDER = (
-    "official_website",
-    "douyin",
-    "xiaohongshu",
-    "baidu",
-    "taobao",
-    "jd",
-)
+# 对外 detect / Kafka 固定返回的平台及顺序
+DETECT_PLATFORM_ORDER = ENABLED_PLATFORM_KEYS
 
 
 def _reset_analysis_caches() -> None:
@@ -207,11 +200,7 @@ def _empty_platform_result(platform: str, brand: str) -> dict:
     if platform == "xiaohongshu":
         return {"platform": "xiaohongshu", "users": []}
     if platform == "baidu":
-        return {"platform": "baidu", "score": "", "assessment_grade": ""}
-    if platform == "taobao":
-        return {"platform": "taobao", "name": "", "profile_url": ""}
-    if platform == "jd":
-        return {"platform": "jd", "name": "", "profile_url": ""}
+        return {"platform": "baidu", "score": 0, "assessment_grade": ""}
     return {"platform": platform}
 
 
@@ -225,7 +214,6 @@ def _platform_result_from_cache(platform: str, brand: str) -> dict:
                 "brand_name": ow.get("brand_name", brand),
                 "website": ow.get("website", ""),
                 "description": ow.get("description", ""),
-                "source": ow.get("source", ""),
             }
         return _empty_platform_result(platform, brand)
 
@@ -240,20 +228,13 @@ def _platform_result_from_cache(platform: str, brand: str) -> dict:
     if platform == "baidu":
         bd = analysis_cache.get("baidu")
         if bd:
+            score = bd.get("score", 0)
+            if score == "" or score is None:
+                score = 0
             return {
                 "platform": "baidu",
-                "score": bd.get("score", ""),
+                "score": int(score),
                 "assessment_grade": bd.get("assessment_grade", ""),
-            }
-        return _empty_platform_result(platform, brand)
-
-    if platform in ("taobao", "jd"):
-        data = preprocessed_cache.get(platform)
-        if data:
-            return {
-                "platform": platform,
-                "name": data.get("name", ""),
-                "profile_url": data.get("profile_url", ""),
             }
         return _empty_platform_result(platform, brand)
 
@@ -264,16 +245,19 @@ def build_detect_response(
     brand: str,
     task_id: str,
     errors: list | None = None,
-    status: str = "completed",
+    status: str = "succeed",
 ) -> dict:
-    """构建对外 detect 接口响应：固定 6 平台全量返回。"""
+    """构建对外 detect / Kafka 响应：固定启用平台全量返回。"""
+    err_list = errors or []
+    if status not in ("succeed", "failed"):
+        status = "failed" if err_list else "succeed"
     results = [_platform_result_from_cache(p, brand) for p in DETECT_PLATFORM_ORDER]
     return {
         "task_id": task_id,
         "brand": brand,
         "status": status,
         "results": results,
-        "errors": errors or [],
+        "errors": err_list,
     }
 
 
@@ -282,9 +266,9 @@ async def detect_brand_async(
     platform_keys: list[str] | None = None,
     task_id: str = "",
 ) -> dict:
-    """同步 detect 入口：搜索完成后一次性返回固定 6 平台聚合结果。"""
+    """同步 detect 入口：搜索完成后一次性返回固定启用平台聚合结果。"""
     global _detect_running
-    from config import PLATFORMS, DETECT_TOTAL_TIMEOUT_SECONDS, DETECT_PLATFORM_TIMEOUT_SECONDS
+    from config import DETECT_TOTAL_TIMEOUT_SECONDS, DETECT_PLATFORM_TIMEOUT_SECONDS
 
     async with _get_detect_state_lock():
         if _detect_running:
@@ -292,8 +276,7 @@ async def detect_brand_async(
         _detect_running = True
 
     try:
-        if not platform_keys:
-            platform_keys = [k for k, v in PLATFORMS.items() if v.get("enabled")]
+        platform_keys = filter_platform_keys(platform_keys)
 
         errors: list[dict] = []
         try:
@@ -308,14 +291,14 @@ async def detect_brand_async(
                 "platform": "_global",
                 "message": f"检测总超时（{DETECT_TOTAL_TIMEOUT_SECONDS}秒），已返回已完成平台的结果",
             })
-            return build_detect_response(keyword, task_id, errors, status="partial")
+            return build_detect_response(keyword, task_id, errors, status="failed")
 
         errors = [
             {"platform": r["platform"], "message": r["error"]}
             for r in search_results
             if r.get("error")
         ]
-        status = "partial" if errors else "completed"
+        status = "failed" if errors else "succeed"
         return build_detect_response(keyword, task_id, errors, status=status)
     finally:
         async with _get_detect_state_lock():
@@ -441,7 +424,7 @@ def get_aggregated_analysis() -> dict:
     """聚合所有平台的分析结果（统一返回给前端）。
 
     返回结构：
-        ``{"task_id": str, "brand": str, "status": "completed", "results": [...], "errors": [...]}``
+        ``{"task_id": str, "brand": str, "status": "succeed", "results": [...], "errors": [...]}``
     """
     import uuid
 
@@ -470,40 +453,17 @@ def get_aggregated_analysis() -> dict:
 
     # 百度
     if "baidu" in analysis_cache:
+        bd = analysis_cache["baidu"]
         results.append({
             "platform": "baidu",
-            "score": analysis_cache["baidu"].get("score", ""),
-            "assessment_grade": analysis_cache["baidu"].get("assessment_grade", ""),
+            "score": bd.get("score", 0),
+            "assessment_grade": bd.get("assessment_grade", ""),
         })
-
-    # 淘宝
-    if "taobao" in preprocessed_cache:
-        tb_data = preprocessed_cache["taobao"]
-        if tb_data:
-            results.append({
-                "platform": "taobao",
-                "name": tb_data.get("name", ""),
-                "profile_url": tb_data.get("profile_url", ""),
-            })
-        else:
-            results.append({"platform": "taobao", "name": "", "profile_url": ""})
-
-    # 京东
-    if "jd" in preprocessed_cache:
-        jd_data = preprocessed_cache["jd"]
-        if jd_data:
-            results.append({
-                "platform": "jd",
-                "name": jd_data.get("name", ""),
-                "profile_url": jd_data.get("profile_url", ""),
-            })
-        else:
-            results.append({"platform": "jd", "name": "", "profile_url": ""})
 
     return {
         "task_id": task_id,
         "brand": brand,
-        "status": "completed",
+        "status": "succeed",
         "results": results,
         "errors": errors,
     }

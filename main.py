@@ -63,6 +63,10 @@ from core.task_manager import TASKS_DIR
 for d in [DATA_DIR, COOKIE_DIR, RESULTS_DIR, TASKS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
+# 运行时终端日志落盘（打包后 console=False 时可在 data/logs/app.log 查看）
+from core.runtime_log import setup_runtime_log, RUNTIME_LOG_FILE
+_log_path = setup_runtime_log()
+
 # 注册进程退出清理（双保险）
 from core.browser_manager import _shutdown_browser_manager
 atexit.register(_shutdown_browser_manager)
@@ -74,5 +78,6 @@ if __name__ == "__main__":
     print("=" * 50)
     print("  品牌认证检测系统")
     print("  打开浏览器访问: http://127.0.0.1:8000")
+    print(f"  运行日志: {RUNTIME_LOG_FILE}")
     print("=" * 50)
     uvicorn.run(app, host="127.0.0.1", port=8000)

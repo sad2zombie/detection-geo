@@ -34,6 +34,10 @@
       {
         "from": "dist/detection-backend-exe.exe",
         "to": "detection-backend-exe.exe"
+      },
+      {
+        "from": "config/packaged.env",
+        "to": "packaged.env"
       }
     ],
     "win": {

@@ -66,6 +66,70 @@ const _log  = (text) => _consoleWrite(text + "\n", false);
 const _elog = (text) => _consoleWrite(text + "\n", true);
 
 // ============================================================================
+// 打包内置 .env — 构建时打入安装包，启动时注入后端进程（目标机开箱即用）
+// ============================================================================
+function parseEnvFile(text) {
+  const out = {};
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let val = trimmed.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"'))
+      || (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    if (key) out[key] = val;
+  }
+  return out;
+}
+
+function getBundledEnvPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "packaged.env");
+  }
+  return path.join(__dirname, "config", "packaged.env");
+}
+
+function ensureAppDataEnvFile(sourcePath) {
+  const appDataBase = process.env.APPDATA
+    || path.join(app.getPath("home"), "AppData", "Roaming");
+  const targetDir = path.join(appDataBase, "detection");
+  const targetFile = path.join(targetDir, ".env");
+  try {
+    fs.mkdirSync(targetDir, { recursive: true });
+    if (!fs.existsSync(targetFile) && fs.existsSync(sourcePath)) {
+      fs.copyFileSync(sourcePath, targetFile);
+      _log("[MAIN] Initialized user .env from packaged template: " + targetFile);
+    }
+  } catch (e) {
+    _elog("[MAIN] Failed to initialize user .env: " + e.message);
+  }
+}
+
+function loadPackagedEnv() {
+  const envPath = getBundledEnvPath();
+  ensureAppDataEnvFile(envPath);
+  if (!fs.existsSync(envPath)) {
+    _log("[MAIN] No packaged.env at: " + envPath);
+    return {};
+  }
+  try {
+    const parsed = parseEnvFile(fs.readFileSync(envPath, "utf8"));
+    const keys = Object.keys(parsed);
+    _log("[MAIN] Loaded packaged.env (" + keys.length + " keys) from: " + envPath);
+    return parsed;
+  } catch (e) {
+    _elog("[MAIN] Failed to read packaged.env: " + e.message);
+    return {};
+  }
+}
+
+// ============================================================================
 // 启动 Python 后端
 // ============================================================================
 function createPyProc(frontendPath) {
@@ -104,6 +168,7 @@ function createPyProc(frontendPath) {
     PROJECT_ROOT: projectRoot,
     DETECTION_DATA_DIR: dataDir,
     DETECTION_APP_VERSION: require("./package.json").version || "1.0.0",
+    ...loadPackagedEnv(),
   };
   const spawnOpts = app.isPackaged
     ? { env, stdio: ["ignore", "pipe", "pipe"], detached: false, windowsHide: true }

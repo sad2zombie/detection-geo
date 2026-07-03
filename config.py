@@ -164,6 +164,26 @@ def filter_platform_keys(platform_keys: list | None) -> list[str]:
     return filtered if filtered else list(ENABLED_PLATFORM_KEYS)
 
 
+def normalize_platform(platform) -> str:
+    """解析单个平台 key（detect / 消费任务每次只检一个平台）。"""
+    allowed = set(ENABLED_PLATFORM_KEYS)
+    if isinstance(platform, str):
+        key = platform.strip()
+        if key in allowed:
+            return key
+        raise ValueError(f"不支持的平台: {platform}")
+    if isinstance(platform, list):
+        if len(platform) == 1:
+            key = str(platform[0]).strip()
+            if key in allowed:
+                return key
+            raise ValueError(f"不支持的平台: {key}")
+        if not platform:
+            raise ValueError("platform 不能为空")
+        raise ValueError("每次只能检测一个平台")
+    raise ValueError("platform 格式无效，应为平台 key 字符串")
+
+
 def get_enabled_platforms() -> dict:
     """返回已启用平台元数据（供前端展示与 /api/platforms）。"""
     return {k: PLATFORMS[k] for k in ENABLED_PLATFORM_KEYS}

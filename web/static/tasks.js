@@ -429,24 +429,29 @@ function showTaskNotice(msg, isError) {
 }
 
 async function runDetectInBackground(taskId, keyword, platforms, sendKafka = false) {
-    const detectPromise = api("/api/detect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task_id: taskId, keyword, platforms, send_kafka: sendKafka }),
-        timeout: 900000,
-    });
-
     setTimeout(() => loadTaskList(), 300);
 
     try {
-        const result = await detectPromise;
-        if (!result.ok) {
-            const err = result.data?.error || `请求失败 (${result.status})`;
-            showTaskNotice(`任务 ${taskId} 创建失败：${err}`, true);
+        for (const platform of platforms) {
+            const result = await api("/api/detect", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    task_id: taskId,
+                    keyword,
+                    platform: platform,
+                    send_kafka: sendKafka,
+                }),
+                timeout: 900000,
+            });
+            if (!result.ok) {
+                const err = result.data?.error || `请求失败 (${result.status})`;
+                showTaskNotice(`任务 ${taskId}（${platform}）失败：${err}`, true);
+                await loadTaskList();
+                return;
+            }
             await loadTaskList();
-            return;
         }
-        await loadTaskList();
         await showTaskReport(taskId);
     } catch (e) {
         showTaskNotice(`任务 ${taskId} 请求失败：${e.message || "网络错误"}`, true);

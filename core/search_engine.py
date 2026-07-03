@@ -106,10 +106,9 @@ def _preprocess_douyin_users(users: list[dict], brand: str) -> list[dict] | None
         if "?" in url:
             url = url.split("?")[0]
         result.append({
-            "platform": "douyin",
             "name": u.get("name", ""),
             "profile_url": url,
-            "douyin_id": u.get("douyin_id", ""),
+            "account_id": u.get("douyin_id", ""),
         })
     return result
 
@@ -128,10 +127,9 @@ def _preprocess_xhs_users(users: list[dict], brand: str) -> list[dict] | None:
         if "?" in url:
             url = url.split("?")[0]
         result.append({
-            "platform": "xiaohongshu",
             "name": u.get("name", ""),
             "profile_url": url,
-            "xhs_id": u.get("xhs_id", ""),
+            "account_id": u.get("xhs_id", ""),
         })
     return result
 
@@ -220,17 +218,47 @@ def _reset_analysis_caches() -> None:
     analysis_cache.clear()
 
 
+def _wrap_platform_result(platform: str, data: dict) -> dict:
+    return {"platform": platform, "data": data}
+
+
+def _format_detect_errors(errors: list | None) -> str:
+    if not errors:
+        return ""
+    parts: list[str] = []
+    for e in errors:
+        platform = e.get("platform", "")
+        message = str(e.get("message", "") or "").strip()
+        if not message:
+            continue
+        parts.append(f"{platform}: {message}" if platform else message)
+    return "; ".join(parts)
+
+
+def _baidu_score_str(score) -> str:
+    if score == "" or score is None:
+        return ""
+    try:
+        return str(int(score))
+    except (TypeError, ValueError):
+        return str(score)
+
+
 def _empty_platform_result(platform: str, brand: str) -> dict:
     """单平台无数据时的空结构（对接契约）。"""
     if platform == "official_website":
-        return {"platform": "official_website", "brand_name": brand, "website": "", "description": ""}
+        return _wrap_platform_result("official_website", {
+            "brand_name": brand,
+            "website": "",
+            "description": "",
+        })
     if platform == "douyin":
-        return {"platform": "douyin", "users": []}
+        return _wrap_platform_result("douyin", {"users": []})
     if platform == "xiaohongshu":
-        return {"platform": "xiaohongshu", "users": []}
+        return _wrap_platform_result("xiaohongshu", {"users": []})
     if platform == "baidu":
-        return {"platform": "baidu", "score": 0, "assessment_grade": ""}
-    return {"platform": platform}
+        return _wrap_platform_result("baidu", {"score": "", "assessment_grade": ""})
+    return _wrap_platform_result(platform, {})
 
 
 def _platform_result_from_cache(platform: str, brand: str) -> dict:
@@ -238,33 +266,28 @@ def _platform_result_from_cache(platform: str, brand: str) -> dict:
     if platform == "official_website":
         ow = preprocessed_cache.get("official_website")
         if ow:
-            return {
-                "platform": "official_website",
+            return _wrap_platform_result("official_website", {
                 "brand_name": ow.get("brand_name", brand),
                 "website": ow.get("website", ""),
                 "description": ow.get("description", ""),
-            }
+            })
         return _empty_platform_result(platform, brand)
 
     if platform == "douyin":
         dy = preprocessed_cache.get("douyin")
-        return {"platform": "douyin", "users": dy if dy else []}
+        return _wrap_platform_result("douyin", {"users": dy if dy else []})
 
     if platform == "xiaohongshu":
         xhs = preprocessed_cache.get("xiaohongshu")
-        return {"platform": "xiaohongshu", "users": xhs if xhs else []}
+        return _wrap_platform_result("xiaohongshu", {"users": xhs if xhs else []})
 
     if platform == "baidu":
         bd = analysis_cache.get("baidu")
         if bd:
-            score = bd.get("score", 0)
-            if score == "" or score is None:
-                score = 0
-            return {
-                "platform": "baidu",
-                "score": int(score),
-                "assessment_grade": bd.get("assessment_grade", ""),
-            }
+            return _wrap_platform_result("baidu", {
+                "score": _baidu_score_str(bd.get("score", "")),
+                "assessment_grade": bd.get("assessment_grade", "") or "",
+            })
         return _empty_platform_result(platform, brand)
 
     return _empty_platform_result(platform, brand)
@@ -275,32 +298,33 @@ def build_detect_response(
     task_id: str,
     errors: list | None = None,
     status: str = "succeed",
-    platform_keys: list[str] | None = None,
+    platform_key: str = "",
 ) -> dict:
-    """构建对外 detect / Kafka 响应；results 仅包含本次检测的平台。"""
+    """构建对外 detect / Kafka 响应；results 为单个平台对象。"""
     err_list = errors or []
     if status not in ("succeed", "failed"):
         status = "failed" if err_list else "succeed"
-    keys = platform_keys if platform_keys else list(DETECT_PLATFORM_ORDER)
-    ordered = [p for p in DETECT_PLATFORM_ORDER if p in keys]
-    results = [_platform_result_from_cache(p, brand) for p in ordered]
+    if not platform_key:
+        raise ValueError("platform_key 不能为空")
     return {
         "task_id": task_id,
         "brand": brand,
         "status": status,
-        "results": results,
-        "errors": err_list,
+        "results": _platform_result_from_cache(platform_key, brand),
+        "errors": _format_detect_errors(err_list),
     }
 
 
 async def detect_brand_async(
     keyword: str,
-    platform_keys: list[str] | None = None,
+    platform_key: str,
     task_id: str = "",
 ) -> dict:
-    """同步 detect 入口：搜索完成后返回本次选定平台的聚合结果。"""
+    """detect 入口：每次只检测一个平台。"""
     global _detect_running
-    from config import DETECT_TOTAL_TIMEOUT_SECONDS, DETECT_PLATFORM_TIMEOUT_SECONDS
+    from config import DETECT_TOTAL_TIMEOUT_SECONDS, DETECT_PLATFORM_TIMEOUT_SECONDS, normalize_platform
+
+    platform_key = normalize_platform(platform_key)
 
     async with _get_detect_state_lock():
         if _detect_running:
@@ -308,23 +332,21 @@ async def detect_brand_async(
         _detect_running = True
 
     try:
-        platform_keys = filter_platform_keys(platform_keys)
-
         errors: list[dict] = []
         try:
             async with asyncio.timeout(DETECT_TOTAL_TIMEOUT_SECONDS):
                 search_results = await search_platforms_async(
                     keyword,
-                    platform_keys,
+                    [platform_key],
                     platform_timeout=DETECT_PLATFORM_TIMEOUT_SECONDS,
                 )
         except TimeoutError:
             errors.append({
-                "platform": "_global",
-                "message": f"检测总超时（{DETECT_TOTAL_TIMEOUT_SECONDS}秒），已返回已完成平台的结果",
+                "platform": platform_key,
+                "message": f"检测超时（{DETECT_TOTAL_TIMEOUT_SECONDS}秒）",
             })
             return build_detect_response(
-                keyword, task_id, errors, status="failed", platform_keys=platform_keys
+                keyword, task_id, errors, status="failed", platform_key=platform_key
             )
 
         errors = [
@@ -334,7 +356,7 @@ async def detect_brand_async(
         ]
         status = "failed" if errors else "succeed"
         return build_detect_response(
-            keyword, task_id, errors, status=status, platform_keys=platform_keys
+            keyword, task_id, errors, status=status, platform_key=platform_key
         )
     finally:
         async with _get_detect_state_lock():
@@ -457,49 +479,47 @@ async def search_platforms_async(
 
 
 def get_aggregated_analysis() -> dict:
-    """聚合所有平台的分析结果（统一返回给前端）。
-
-    返回结构：
-        ``{"task_id": str, "brand": str, "status": "succeed", "results": [...], "errors": [...]}``
-    """
+    """聚合所有平台的分析结果（统一返回给前端）。"""
     import uuid
 
     task_id = str(uuid.uuid4())[:8]
     brand = _last_keyword
     results: list = []
-    errors: list = []
 
-    # 一级信源：品牌官网
     if "official_website" in preprocessed_cache:
-        ow = preprocessed_cache["official_website"]
+        ow = preprocessed_cache.get("official_website")
         if ow:
-            results.append(ow)
+            results.append(_wrap_platform_result("official_website", {
+                "brand_name": ow.get("brand_name", brand),
+                "website": ow.get("website", ""),
+                "description": ow.get("description", ""),
+            }))
         else:
-            results.append({"platform": "official_website", "brand_name": brand, "website": "未找到", "description": ""})
+            results.append(_wrap_platform_result("official_website", {
+                "brand_name": brand,
+                "website": "未找到",
+                "description": "",
+            }))
 
-    # 抖音
     if "douyin" in preprocessed_cache:
-        dy_data = preprocessed_cache["douyin"]
-        results.append({"platform": "douyin", "users": dy_data if dy_data else []})
+        dy_data = preprocessed_cache.get("douyin")
+        results.append(_wrap_platform_result("douyin", {"users": dy_data if dy_data else []}))
 
-    # 小红书
     if "xiaohongshu" in preprocessed_cache:
-        xhs_data = preprocessed_cache["xiaohongshu"]
-        results.append({"platform": "xiaohongshu", "users": xhs_data if xhs_data else []})
+        xhs_data = preprocessed_cache.get("xiaohongshu")
+        results.append(_wrap_platform_result("xiaohongshu", {"users": xhs_data if xhs_data else []}))
 
-    # 百度
     if "baidu" in analysis_cache:
         bd = analysis_cache["baidu"]
-        results.append({
-            "platform": "baidu",
-            "score": bd.get("score", 0),
-            "assessment_grade": bd.get("assessment_grade", ""),
-        })
+        results.append(_wrap_platform_result("baidu", {
+            "score": _baidu_score_str(bd.get("score", "")),
+            "assessment_grade": bd.get("assessment_grade", "") or "",
+        }))
 
     return {
         "task_id": task_id,
         "brand": brand,
         "status": "succeed",
         "results": results,
-        "errors": errors,
+        "errors": "",
     }

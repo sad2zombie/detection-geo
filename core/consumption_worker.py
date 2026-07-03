@@ -9,8 +9,7 @@ import httpx
 
 import config
 from core.consumption_log import add_log
-from core.kafka_producer import build_empty_results, send_result
-from core.terminal_info import get_terminal_info
+from core.kafka_producer import build_empty_result, send_result
 
 _poll_lock = asyncio.Lock()
 
@@ -50,10 +49,22 @@ def get_poll_status() -> dict:
     }
 
 
-async def _fetch_task(client: httpx.AsyncClient, terminal_id: str) -> dict | None:
-    """向服务器拉取一条待处理任务。无任务时返回 None。"""
+async def _fetch_task(client: httpx.AsyncClient, platform_key: str) -> dict | None:
+    """向服务器拉取一条待处理任务。
+
+    请求体：``{"terminal_id": "...", "platform": "official_website"}``
+    响应体：``{"task_id": "...", "keyword": "...", "platform": "..."}``
+    无任务时返回 None（HTTP 204 或空 body）。
+    """
+    from core.terminal_info import get_terminal_info
+
+    terminal_id = get_terminal_info()["terminal_id"]
     url = config.CONSUMPTION_FETCH_URL
-    resp = await client.get(url, params={"terminal_id": terminal_id})
+    resp = await client.post(
+        url,
+        json={"terminal_id": terminal_id, "platform": platform_key},
+        headers={"Content-Type": "application/json"},
+    )
     if resp.status_code == 204:
         return None
     resp.raise_for_status()
@@ -68,9 +79,25 @@ async def _fetch_task(client: httpx.AsyncClient, terminal_id: str) -> dict | Non
     if not isinstance(task, dict):
         return None
     task_id = str(task.get("task_id") or "").strip()
-    if not task_id:
+    keyword = str(task.get("keyword") or task.get("brand") or "").strip()
+    platform_raw = task.get("platform")
+    if not task_id or not keyword or platform_raw in (None, "", []):
         return None
-    return task
+    try:
+        platform = config.normalize_platform(platform_raw)
+    except ValueError:
+        return None
+    if platform != platform_key:
+        print(
+            f"[Consumption] 服务器返回 platform={platform_raw!r} 与请求 {platform_key!r} 不一致，已忽略",
+            flush=True,
+        )
+        return None
+    return {
+        "task_id": task_id,
+        "keyword": keyword,
+        "platform": platform,
+    }
 
 
 async def _publish_to_kafka(result: dict) -> None:
@@ -89,15 +116,15 @@ async def _run_detect(task: dict) -> dict:
 
     task_id = str(task.get("task_id") or "").strip()
     keyword = str(task.get("keyword") or task.get("brand") or "").strip()
-    platform_keys = config.filter_platform_keys(task.get("platforms") or [])
+    platform_key = config.normalize_platform(task.get("platform"))
 
     if not keyword:
         raise ValueError("任务缺少 keyword")
 
-    create_task(task_id, keyword, platform_keys)
+    create_task(task_id, keyword, [platform_key])
     set_task_running(task_id)
     try:
-        result = await detect_brand_async(keyword, platform_keys, task_id=task_id)
+        result = await detect_brand_async(keyword, platform_key, task_id=task_id)
         complete_task(task_id, result)
         return result
     except DetectBusyError as e:
@@ -109,7 +136,7 @@ async def _run_detect(task: dict) -> dict:
 
 
 async def poll_once() -> dict:
-    """拉取一条任务：入库 → 检测 → Kafka 回传。持锁期间不再向服务器拉取。"""
+    """按平台依次向服务器拉取任务：入库 → 检测 → Kafka 回传。"""
     if not config.CONSUMPTION_FETCH_URL:
         return {"ok": True, "fetched": False, "reason": "未配置 CONSUMPTION_FETCH_URL"}
     if not config.KAFKA_BOOTSTRAP_SERVERS:
@@ -127,15 +154,25 @@ async def poll_once() -> dict:
         if _is_local_busy():
             return {"ok": True, "fetched": False, "reason": "本地任务执行中，暂不从服务器拉取"}
 
-        terminal_id = get_terminal_info()["terminal_id"]
         timeout = httpx.Timeout(30.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            task = await _fetch_task(client, terminal_id)
+            task = None
+            for platform_key in config.ENABLED_PLATFORM_KEYS:
+                print(f"[Consumption] 拉取任务 platform={platform_key}", flush=True)
+                task = await _fetch_task(client, platform_key)
+                if task:
+                    break
+
             if not task:
                 return {"ok": True, "fetched": False, "reason": "暂无新任务"}
 
             task_id = str(task["task_id"]).strip()
-            keyword = str(task.get("keyword") or task.get("brand") or "").strip()
+            keyword = task["keyword"]
+            platform_key = task["platform"]
+            print(
+                f"[Consumption] 收到任务 task_id={task_id} keyword={keyword} platform={platform_key}",
+                flush=True,
+            )
             add_log(task_id, "入库")
 
             try:
@@ -143,16 +180,18 @@ async def poll_once() -> dict:
                 await _publish_to_kafka(result)
                 outcome = "成功" if result.get("status") == "succeed" else "失败"
                 add_log(task_id, outcome)
-                return {"ok": True, "fetched": True, "task_id": task_id, "outcome": outcome}
+                return {
+                    "ok": True,
+                    "fetched": True,
+                    "task_id": task_id,
+                    "platform": platform_key,
+                    "outcome": outcome,
+                }
             except Exception as e:
                 err_msg = str(e)
-                failed_result = {
-                    "task_id": task_id,
-                    "brand": keyword,
-                    "status": "failed",
-                    "results": build_empty_results(keyword),
-                    "errors": [{"platform": "_global", "message": err_msg}],
-                }
+                failed_result = build_empty_result(
+                    keyword, platform_key, task_id=task_id, error=err_msg
+                )
                 try:
                     await _publish_to_kafka(failed_result)
                 except Exception as kafka_err:
@@ -162,7 +201,8 @@ async def poll_once() -> dict:
                     "ok": True,
                     "fetched": True,
                     "task_id": task_id,
+                    "platform": platform_key,
                     "outcome": "失败",
                     "error": err_msg,
                 }
-
+

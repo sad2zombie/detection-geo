@@ -19,7 +19,7 @@ async def _consumption_poll_loop():
     """后台定时向服务器拉取消费任务。"""
     if not config.CONSUMPTION_POLL_ENABLED:
         return
-    if not config.CONSUMPTION_FETCH_URL or not config.KAFKA_RESULT_TOPIC:
+    if not config.CONSUMPTION_FETCH_URL or not config.TERMINAL_KEY or not config.KAFKA_RESULT_TOPIC:
         return
     from core.consumption_worker import poll_once
 

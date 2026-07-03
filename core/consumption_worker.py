@@ -37,6 +37,7 @@ def get_poll_status() -> dict:
         "poll_enabled": config.CONSUMPTION_POLL_ENABLED,
         "configured": bool(
             config.CONSUMPTION_FETCH_URL
+            and config.TERMINAL_KEY
             and config.KAFKA_BOOTSTRAP_SERVERS
             and config.KAFKA_RESULT_TOPIC
         ),
@@ -52,9 +53,12 @@ def get_poll_status() -> dict:
 async def _fetch_task(client: httpx.AsyncClient, platform_key: str) -> dict | None:
     """向服务器拉取一条待处理任务。
 
-    请求体：``{"terminal_id": "...", "platform": "official_website"}``
-    响应体：``{"task_id": "...", "keyword": "...", "platform": "..."}``
-    无任务时返回 None（HTTP 204 或空 body）。
+    请求体：``{"terminalId": "...", "platform": "douyin"}``
+    响应体::
+
+        {"code": 0, "msg": "操作成功", "data": {"taskId": 1, "keyword": "...", "platform": "..."}}
+
+    无任务时 ``code`` 非 0（如 ``500`` / ``没有可执行任务``），或 ``data`` 为空，返回 None。
     """
     from core.terminal_info import get_terminal_info
 
@@ -62,25 +66,32 @@ async def _fetch_task(client: httpx.AsyncClient, platform_key: str) -> dict | No
     url = config.CONSUMPTION_FETCH_URL
     resp = await client.post(
         url,
-        json={"terminal_id": terminal_id, "platform": platform_key},
-        headers={"Content-Type": "application/json"},
+        json={"terminalId": terminal_id, "platform": platform_key},
+        headers={
+            "Content-Type": "application/json",
+            "x-terminal-key": config.TERMINAL_KEY,
+        },
     )
     if resp.status_code == 204:
         return None
     resp.raise_for_status()
     if not resp.content:
         return None
-    data = resp.json()
-    if not data:
+    body = resp.json()
+    if not isinstance(body, dict) or not body:
         return None
-    if isinstance(data, dict) and data.get("empty"):
+
+    code = body.get("code")
+    if str(code) != "0":
         return None
-    task = data.get("task") if isinstance(data, dict) and "task" in data else data
-    if not isinstance(task, dict):
+
+    data = body.get("data")
+    if not isinstance(data, dict) or not data:
         return None
-    task_id = str(task.get("task_id") or "").strip()
-    keyword = str(task.get("keyword") or task.get("brand") or "").strip()
-    platform_raw = task.get("platform")
+
+    task_id = str(data.get("taskId") or data.get("task_id") or "").strip()
+    keyword = str(data.get("keyword") or "").strip()
+    platform_raw = data.get("platform")
     if not task_id or not keyword or platform_raw in (None, "", []):
         return None
     try:
@@ -115,7 +126,7 @@ async def _run_detect(task: dict) -> dict:
     )
 
     task_id = str(task.get("task_id") or "").strip()
-    keyword = str(task.get("keyword") or task.get("brand") or "").strip()
+    keyword = str(task.get("keyword") or "").strip()
     platform_key = config.normalize_platform(task.get("platform"))
 
     if not keyword:
@@ -139,6 +150,8 @@ async def poll_once() -> dict:
     """按平台依次向服务器拉取任务：入库 → 检测 → Kafka 回传。"""
     if not config.CONSUMPTION_FETCH_URL:
         return {"ok": True, "fetched": False, "reason": "未配置 CONSUMPTION_FETCH_URL"}
+    if not config.TERMINAL_KEY:
+        return {"ok": True, "fetched": False, "reason": "未配置 TERMINAL_KEY"}
     if not config.KAFKA_BOOTSTRAP_SERVERS:
         return {"ok": True, "fetched": False, "reason": "未配置 KAFKA_BOOTSTRAP_SERVERS"}
     if not config.KAFKA_RESULT_TOPIC:

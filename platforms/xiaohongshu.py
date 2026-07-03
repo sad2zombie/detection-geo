@@ -2,6 +2,7 @@
 """小红书平台搜索模块（仅 _do_search 核心逻辑）"""
 
 import asyncio
+import random
 
 from config import XHS_PROFILE
 from platforms.base import BasePlatform, SearchResult
@@ -22,7 +23,7 @@ class XiaohongshuPlatform(BasePlatform):
             if not await self._goto_with_retry("https://www.xiaohongshu.com"):
                 return self._err_result(keyword, "https://www.xiaohongshu.com", "导航小红书首页失败")
 
-            await asyncio.sleep(3)
+            await asyncio.sleep(random.uniform(2.5, 4))
 
             # 关闭弹窗
             try:
@@ -34,7 +35,7 @@ class XiaohongshuPlatform(BasePlatform):
                 }""")
             except Exception:
                 pass
-            await asyncio.sleep(1)
+            await asyncio.sleep(random.uniform(0.8, 1.5))
 
             # 等待搜索框出现（首页是 SPA，textarea 由 JS 异步渲染）
             input_box_selectors = [
@@ -66,7 +67,7 @@ class XiaohongshuPlatform(BasePlatform):
                         continue
                 if input_locator is not None:
                     break
-                await asyncio.sleep(1)
+                await asyncio.sleep(random.uniform(0.8, 1.5))
 
             if input_locator is None:
                 print(f"    [{self.platform_name}搜索] 未找到搜索输入框，直接返回无数据", flush=True)
@@ -112,7 +113,7 @@ class XiaohongshuPlatform(BasePlatform):
                     except Exception as type_err:
                         return self._err_result(keyword, "https://www.xiaohongshu.com", f"输入关键词失败: {str(type_err)[:80]}")
 
-            await asyncio.sleep(3)
+            await asyncio.sleep(random.uniform(0.8, 1.5))
             current_value = ""
             try:
                 current_value = await input_locator.input_value()
@@ -142,13 +143,13 @@ class XiaohongshuPlatform(BasePlatform):
                 pass
 
             await self._page.keyboard.press("Enter")
-            await asyncio.sleep(3)
+            await asyncio.sleep(random.uniform(2.5,3.5))
 
             try:
                 await self._page.reload(wait_until="domcontentloaded", timeout=20000)
             except Exception:
                 pass
-            await asyncio.sleep(3)
+            await asyncio.sleep(random.uniform(2.5,3.5))
 
             # 等待用户 tab 出现并点击
             tab_clicked = False
@@ -180,10 +181,10 @@ class XiaohongshuPlatform(BasePlatform):
                             continue
                 if tab_clicked:
                     break
-                await asyncio.sleep(1)
+                await asyncio.sleep(random.uniform(1.5,2.5))
 
             if tab_clicked:
-                await asyncio.sleep(4)
+                await asyncio.sleep(random.uniform(3.5,3.9))
             else:
                 print(f"    [{self.platform_name}搜索] 未找到用户tab，继续使用当前页面", flush=True)
 

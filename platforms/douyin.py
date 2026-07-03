@@ -2,6 +2,7 @@
 """抖音平台搜索模块（仅 _do_search 核心逻辑）"""
 
 import asyncio
+import random
 from urllib.parse import quote
 
 from config import DOUYIN_PROFILE
@@ -24,26 +25,29 @@ class DouyinPlatform(BasePlatform):
             if not await self._goto_with_retry(search_url):
                 return self._err_result(keyword, search_url, "导航抖音搜索页失败")
 
-            await asyncio.sleep(6)
+            await asyncio.sleep(random.uniform(5, 7))
 
-            # 关闭登录弹窗
+            # 关闭登录弹窗（仅关闭可见的弹窗层，避免误点正常元素）
             try:
                 await self._page.evaluate("""() => {
-                    ['.dy-account-close', '[class*="login"] [class*="close"]',
-                     '[class*="modal"] [class*="close"]', '[class*="dialog"] [class*="close"]',
-                     '.login-mask-close'].forEach(function(sel) {
-                        document.querySelectorAll(sel).forEach(function(el) { el.click(); });
-                    });
-                    document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}));
+                    var overlays = document.querySelectorAll('.login-mask-close, [class*="login-mask"], [class*="loginMask"]');
+                    for (var i = 0; i < overlays.length; i++) {
+                        try { overlays[i].click(); } catch(e) {}
+                    }
+                    var closeBtns = document.querySelectorAll('.dy-account-close');
+                    for (var i = 0; i < closeBtns.length; i++) {
+                        try { closeBtns[i].click(); } catch(e) {}
+                    }
+                    try { document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'})); } catch(e) {}
                 }""")
             except Exception:
                 pass
-            await asyncio.sleep(2)
+            await asyncio.sleep(random.uniform(1.5, 3))
 
-            # 滚动加载
+            # 滚动加载（随机延迟模拟人类浏览节奏）
             for _ in range(5):
                 await self._page.evaluate("window.scrollBy(0, 1000)")
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(random.uniform(1, 2.5))
                 current_count = await self._page.evaluate(
                     "() => document.querySelectorAll('.search-result-card').length"
                 )
@@ -70,6 +74,7 @@ class DouyinPlatform(BasePlatform):
                 }
 
                 for (const card of cards) {
+                    try {
                     const userLink = card.querySelector('a[href*="/user/"]');
                     const href = userLink ? userLink.href : '';
                     if (!href || href.includes('/user/self') || seen.has(href)) continue;
@@ -107,16 +112,9 @@ class DouyinPlatform(BasePlatform):
                     if (!followerCount && followerMatch) followerCount = followerMatch[1];
 
                     if (!douyinId) {
-                        const idMatch = fullText.match(/抖音号:\\s*(\\S+)/);
+                        const idMatch = fullText.match(/抖音号:\\s*([\\w.-]+)/);
                         if (idMatch) {
-                            let rawId = idMatch[1];
-                            if (likeCount) {
-                                const likeNum = likeCount.replace('万', '');
-                                if (rawId.endsWith(likeNum)) {
-                                    rawId = rawId.slice(0, -likeNum.length);
-                                }
-                            }
-                            douyinId = rawId.trim();
+                            douyinId = idMatch[1].trim();
                         }
                     }
 
@@ -168,6 +166,10 @@ class DouyinPlatform(BasePlatform):
                             like_count: likeCount,
                             description: description,
                         });
+                    }
+
+                    } catch(cardErr) {
+                        console.warn('[Douyin] 卡片提取异常:', cardErr);
                     }
                 }
                 return results;

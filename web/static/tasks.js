@@ -267,6 +267,22 @@ function hideModalMsg() {
 
 }
 
+async function initKafkaCheckbox() {
+    const field = document.getElementById("modal-kafka-field");
+    const checkbox = document.getElementById("modal-send-kafka");
+    if (!field || !checkbox) return;
+
+    try {
+        const result = await api("/api/consumption/status");
+        const data = result.data || {};
+        if (data.kafka_configured === true || (data.kafka_bootstrap && data.kafka_result_topic)) {
+            field.style.display = "flex";
+        }
+    } catch (e) {
+        console.warn("加载 Kafka 配置状态失败", e);
+    }
+}
+
 
 
 function showSearchMsg(text, type) {
@@ -373,6 +389,9 @@ function openCreateModal() {
 
     });
 
+    const kafkaCheckbox = document.getElementById("modal-send-kafka");
+    if (kafkaCheckbox) kafkaCheckbox.checked = false;
+
     updateDropdownLabel();
 
     setDropdownOpen(false);
@@ -409,11 +428,11 @@ function showTaskNotice(msg, isError) {
     section.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-async function runDetectInBackground(taskId, keyword, platforms) {
+async function runDetectInBackground(taskId, keyword, platforms, sendKafka = false) {
     const detectPromise = api("/api/detect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task_id: taskId, keyword, platforms }),
+        body: JSON.stringify({ task_id: taskId, keyword, platforms, send_kafka: sendKafka }),
         timeout: 900000,
     });
 
@@ -442,6 +461,7 @@ async function createTestTask() {
     const keyword = (keywordEl?.value || "").trim();
     const taskId = suggestTestTaskId(lastTaskList);
     const platforms = getSelectedModalPlatforms();
+    const sendKafka = document.getElementById("modal-send-kafka")?.checked || false;
 
     if (!keyword) {
         showModalMsg("请输入品牌关键词", "error");
@@ -461,7 +481,7 @@ async function createTestTask() {
     if (searchIdInput) searchIdInput.value = "";
     if (searchKwInput) searchKwInput.value = "";
 
-    runDetectInBackground(taskId, keyword, platforms);
+    runDetectInBackground(taskId, keyword, platforms, sendKafka);
 }
 
 
@@ -852,6 +872,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     loadPlatforms();
+    initKafkaCheckbox();
 
     loadTaskList();
 

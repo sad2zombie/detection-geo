@@ -148,7 +148,7 @@ async def api_auth_login(platform_key: str, request: Request):
     return JSONResponse(result)
 
 
-# ---------- API: 对外 detect（同步，固定启用平台全量返回）----------
+# ---------- API: 对外 detect（同步，按请求平台返回结果）----------
 @app.post("/api/detect")
 async def api_detect(request: Request, body: dict):
     """品牌检测统一入口：搜索完成后一次性返回聚合结果。
@@ -157,11 +157,12 @@ async def api_detect(request: Request, body: dict):
         {"task_id": "...", "keyword": "西屋", "platforms": [...]}  # platforms 可选
 
     响应体::
-        {"task_id", "brand", "status", "results": [固定4平台], "errors": []}
+        {"task_id", "brand", "status", "results": [本次检测的平台], "errors": []}
     """
     task_id = (body.get("task_id") or "").strip()
     keyword = body.get("keyword", "").strip()
     platform_keys = config.filter_platform_keys(body.get("platforms") or [])
+    send_kafka = bool(body.get("send_kafka", False))
 
     if not task_id:
         return JSONResponse({"error": "task_id 不能为空"}, status_code=400)
@@ -188,6 +189,12 @@ async def api_detect(request: Request, body: dict):
     try:
         result = await detect_brand_async(keyword, platform_keys, task_id=task_id)
         complete_task(task_id, result)
+        if send_kafka:
+            try:
+                from core.kafka_producer import send_result
+                await send_result(result)
+            except Exception as kafka_err:
+                print(f"[Kafka] 任务 {task_id} 回传失败（已忽略）: {kafka_err}", flush=True)
         return JSONResponse(result)
     except DetectBusyError:
         fail_task(task_id, "检测任务进行中，请稍后再试")

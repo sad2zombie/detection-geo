@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """登录状态管理器（异步版本）"""
 
+import asyncio
 from typing import Any
 
 from platforms import get_platform
@@ -21,6 +22,8 @@ class AuthManager:
         self._instances: dict[str, BasePlatform] = {}
         # 形状: { platform_key: {"platform": str, "platform_name": str, "isLoggedIn": bool, "note": str, "error": str} }
         self._status_cache: dict[str, dict] = {}
+        self._login_sessions: dict[str, int] = {}
+        self._login_wait_tasks: dict[str, asyncio.Task] = {}
 
     def _get_platform(self, key: str) -> BasePlatform:
         if key not in self._instances:
@@ -87,7 +90,7 @@ class AuthManager:
     async def login_platform(self, platform_key: str, url: str | None = None) -> dict:
         """打开指定平台浏览器并等待用户登录（异步）。
 
-        url 不为空时：BM 启动浏览器 → 独立 newPage → goto url → 后台监听 page 关闭后 release。
+        url 不为空时：启动有头浏览器 → 在首个窗口 goto url → 后台监听关闭后 release。
         """
         p = self._get_platform(platform_key)
         if p is None:
@@ -105,38 +108,66 @@ class AuthManager:
             print(f"[AuthManager] login_platform 异常: {type(e).__name__}: {e}", flush=True)
             return {"success": False, "platform": platform_key, "error": str(e)}
 
-    async def _open_profile(self, p: BasePlatform, url: str) -> None:
-        """用平台的持久化 BrowserContext 启浏览器 + 独立 newPage 打开 url。"""
-        import asyncio
+    def _bump_login_session(self, platform_key: str) -> int:
+        """开启新的 profile 打开会话，并取消上一轮的后台释放任务。"""
+        session = self._login_sessions.get(platform_key, 0) + 1
+        self._login_sessions[platform_key] = session
+        return session
 
-        print(f"[AuthManager] _open_profile: 确保浏览器启动", flush=True)
-        await p._ensure_browser(headless=False)
-        print(f"[AuthManager] _open_profile: 浏览器就绪, ctx={p._ctx is not None}", flush=True)
-        if p._ctx is None:
-            raise RuntimeError("浏览器未就绪")
-        page = await p._ctx.new_page()
+    async def _cancel_login_wait_task(self, platform_key: str) -> None:
+        old_task = self._login_wait_tasks.pop(platform_key, None)
+        if old_task and not old_task.done():
+            old_task.cancel()
+            try:
+                await old_task
+            except asyncio.CancelledError:
+                pass
+
+    async def _release_login_browser(self, p: BasePlatform) -> None:
+        p._ctx = None
+        p._page = None
+        try:
+            await p._bm.release()
+            print("[AuthManager] 浏览器资源已释放", flush=True)
+        except Exception as e:
+            print(f"[AuthManager] release 异常（忽略）: {e}", flush=True)
+
+    async def _open_profile(self, p: BasePlatform, url: str) -> None:
+        """用平台持久化 profile 启动有头浏览器，在首个窗口直接打开 url。"""
+        await self._cancel_login_wait_task(p.platform_key)
+        session = self._bump_login_session(p.platform_key)
+
+        print(f"[AuthManager] _open_profile: 启动浏览器 (session={session})", flush=True)
+        try:
+            p._ctx, page = await p._bm.ensure_page(p.profile_dir, headless=False)
+        except Exception as e:
+            print(f"[AuthManager] _open_profile 启动浏览器失败: {type(e).__name__}: {e}", flush=True)
+            await self._release_login_browser(p)
+            raise
+
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=30000)
         except Exception as e:
-            print(f"[AuthManager] open_profile goto 失败（保留 page）: {e}", flush=True)
+            print(f"[AuthManager] open_profile goto 失败（保留窗口）: {e}", flush=True)
 
         async def _wait_close_and_release():
             """等待用户关闭页面/浏览器，然后释放资源。"""
             try:
-                # 同时监听 page close 和 context close
                 close_task = asyncio.create_task(
                     page.wait_for_event("close", timeout=3600 * 1000)
                 )
-                # 每2秒检查 page 和 context 是否还活着
                 while not close_task.done():
                     await asyncio.sleep(2)
+                    if not self._login_sessions.get(p.platform_key) == session:
+                        print("[AuthManager] 会话已被新请求取代，停止等待", flush=True)
+                        close_task.cancel()
+                        break
                     try:
-                        # 检查 context 是否已关闭（用户关了整个浏览器窗口）
-                        if p._ctx is None:
+                        ctx = p._bm.get_context()
+                        if ctx is None:
                             print("[AuthManager] context 已消失，触发释放", flush=True)
                             close_task.cancel()
                             break
-                        # 检查 page 是否还活着
                         _ = page.url
                     except Exception:
                         print("[AuthManager] page 已关闭，触发释放", flush=True)
@@ -147,10 +178,7 @@ class AuthManager:
             except Exception as e:
                 print(f"[AuthManager] wait_close 异常（忽略）: {e}", flush=True)
             finally:
-                try:
-                    await p._bm.release()
-                    print("[AuthManager] 浏览器资源已释放", flush=True)
-                except Exception as e:
-                    print(f"[AuthManager] release 异常（忽略）: {e}", flush=True)
+                await self._release_login_browser(p)
 
-        asyncio.create_task(_wait_close_and_release())
+        task = asyncio.create_task(_wait_close_and_release())
+        self._login_wait_tasks[p.platform_key] = task

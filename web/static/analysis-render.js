@@ -2,8 +2,8 @@
 (function () {
     const PLATFORM_ANALYSIS_CONFIG = {
         official_website: { title: "品牌官网", kind: "brand-website", level: 1 },
-        douyin: { title: "抖音蓝V账号（粉丝排名前3）", kind: "users-table", level: 2, idKey: "douyin_id", idLabel: "抖音号" },
-        xiaohongshu: { title: "小红书企业认证账号（粉丝排名前3）", kind: "users-table", level: 2, idKey: "xhs_id", idLabel: "小红书号" },
+        douyin: { title: "抖音蓝V账号", kind: "users-table", level: 2, idKey: "douyin_id", idLabel: "抖音号" },
+        xiaohongshu: { title: "小红书企业认证账号", kind: "users-table", level: 2, idKey: "xhs_id", idLabel: "小红书号" },
         jd: { title: "京东官方旗舰店", kind: "shop-row", level: 2, nameLabel: "店铺名称" },
         taobao: { title: "淘宝官方旗舰店", kind: "shop-row", level: 2, nameLabel: "店铺名称" },
         baidu: { title: "百度信息密度评估", kind: "score-row", level: 3 },

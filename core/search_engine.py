@@ -49,25 +49,59 @@ def _parse_follower_count(raw: str | int | float | None) -> float | None:
 
 
 # ============================================================
-# 各平台预处理：brand 匹配 → 过滤 → 排序 → 精简字段
+# 各平台预处理：过滤 → 按品牌相似度排序 → 精简字段
 # ============================================================
 
+def _brand_name_similarity(brand: str, name: str) -> float:
+    """品牌名与账号名的相似度评分（越高越相关）。"""
+    bn = brand.replace(" ", "").strip().lower()
+    nc = name.replace(" ", "").strip().lower()
+    if not bn or not nc:
+        return 0.0
+    if bn == nc:
+        return 100.0
+    if bn in nc:
+        idx = nc.find(bn)
+        pos_bonus = max(0, 10 - idx)
+        return 85.0 + len(bn) / max(len(nc), 1) * 10 + pos_bonus
+    if nc in bn:
+        return 75.0 + len(nc) / max(len(bn), 1) * 10
+    matched = 0
+    for ch in bn:
+        if ch in nc:
+            matched += 1
+    ordered = 0
+    ni = 0
+    for ch in bn:
+        while ni < len(nc):
+            if nc[ni] == ch:
+                ordered += 1
+                ni += 1
+                break
+            ni += 1
+    overlap_score = matched / len(bn) * 35
+    order_score = ordered / len(bn) * 25
+    return overlap_score + order_score
+
+
+def _user_sort_key(u: dict, brand: str) -> tuple:
+    """主排序：品牌相似度；次排序：粉丝数、获赞数。"""
+    sim = _brand_name_similarity(brand, u.get("name", ""))
+    fc = _parse_follower_count(u.get("follower_count"))
+    lc = _parse_follower_count(u.get("like_count"))
+    return (sim, fc if fc is not None else -1, lc if lc is not None else -1)
+
+
 def _preprocess_douyin_users(users: list[dict], brand: str) -> list[dict] | None:
-    """抖音：先匹配品牌名 → 过滤蓝V → 按粉丝数降序 → 取前3 → 精简字段 → URL脱敏"""
-    brand_users = [u for u in users if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower()]
-    blue_v_users = [u for u in brand_users if u.get("verification") == "蓝V"]
+    """抖音：过滤蓝V → 按品牌名相似度排序 → 取前20 → 精简字段 → URL脱敏"""
+    blue_v_users = [u for u in users if u.get("verification") == "蓝V"]
     if not blue_v_users:
         return None
 
-    def sort_key(u: dict):
-        fc = _parse_follower_count(u.get("follower_count"))
-        lc = _parse_follower_count(u.get("like_count"))
-        return (fc if fc is not None else -1, lc if lc is not None else -1)
-
-    blue_v_users.sort(key=sort_key, reverse=True)
+    blue_v_users.sort(key=lambda u: _user_sort_key(u, brand), reverse=True)
 
     result = []
-    for u in blue_v_users[:3]:
+    for u in blue_v_users[:20]:
         url = u.get("profile_url", "")
         if "?" in url:
             url = url.split("?")[0]
@@ -80,21 +114,16 @@ def _preprocess_douyin_users(users: list[dict], brand: str) -> list[dict] | None
     return result
 
 
-def _preprocess_xhs_users(users: list[dict]) -> list[dict] | None:
-    """小红书：过滤企业认证 → 按粉丝数降序 → 取前3 → 精简字段 → URL脱敏"""
+def _preprocess_xhs_users(users: list[dict], brand: str) -> list[dict] | None:
+    """小红书：过滤企业认证 → 按品牌名相似度排序 → 取前20 → 精简字段 → URL脱敏"""
     verified_users = [u for u in users if u.get("verification") == "企业认证"]
     if not verified_users:
         return None
 
-    def sort_key(u: dict):
-        fc = _parse_follower_count(u.get("follower_count"))
-        lc = _parse_follower_count(u.get("like_count"))
-        return (fc if fc is not None else -1, lc if lc is not None else -1)
-
-    verified_users.sort(key=sort_key, reverse=True)
+    verified_users.sort(key=lambda u: _user_sort_key(u, brand), reverse=True)
 
     result = []
-    for u in verified_users[:3]:
+    for u in verified_users[:20]:
         url = u.get("profile_url", "")
         if "?" in url:
             url = url.split("?")[0]
@@ -246,12 +275,15 @@ def build_detect_response(
     task_id: str,
     errors: list | None = None,
     status: str = "succeed",
+    platform_keys: list[str] | None = None,
 ) -> dict:
-    """构建对外 detect / Kafka 响应：固定启用平台全量返回。"""
+    """构建对外 detect / Kafka 响应；results 仅包含本次检测的平台。"""
     err_list = errors or []
     if status not in ("succeed", "failed"):
         status = "failed" if err_list else "succeed"
-    results = [_platform_result_from_cache(p, brand) for p in DETECT_PLATFORM_ORDER]
+    keys = platform_keys if platform_keys else list(DETECT_PLATFORM_ORDER)
+    ordered = [p for p in DETECT_PLATFORM_ORDER if p in keys]
+    results = [_platform_result_from_cache(p, brand) for p in ordered]
     return {
         "task_id": task_id,
         "brand": brand,
@@ -266,7 +298,7 @@ async def detect_brand_async(
     platform_keys: list[str] | None = None,
     task_id: str = "",
 ) -> dict:
-    """同步 detect 入口：搜索完成后一次性返回固定启用平台聚合结果。"""
+    """同步 detect 入口：搜索完成后返回本次选定平台的聚合结果。"""
     global _detect_running
     from config import DETECT_TOTAL_TIMEOUT_SECONDS, DETECT_PLATFORM_TIMEOUT_SECONDS
 
@@ -291,7 +323,9 @@ async def detect_brand_async(
                 "platform": "_global",
                 "message": f"检测总超时（{DETECT_TOTAL_TIMEOUT_SECONDS}秒），已返回已完成平台的结果",
             })
-            return build_detect_response(keyword, task_id, errors, status="failed")
+            return build_detect_response(
+                keyword, task_id, errors, status="failed", platform_keys=platform_keys
+            )
 
         errors = [
             {"platform": r["platform"], "message": r["error"]}
@@ -299,7 +333,9 @@ async def detect_brand_async(
             if r.get("error")
         ]
         status = "failed" if errors else "succeed"
-        return build_detect_response(keyword, task_id, errors, status=status)
+        return build_detect_response(
+            keyword, task_id, errors, status=status, platform_keys=platform_keys
+        )
     finally:
         async with _get_detect_state_lock():
             _detect_running = False
@@ -377,7 +413,7 @@ async def search_platforms_async(
                 if key == "douyin":
                     preprocessed_cache["douyin"] = _preprocess_douyin_users(result["users"], keyword)
                 elif key == "xiaohongshu":
-                    preprocessed_cache["xiaohongshu"] = _preprocess_xhs_users(result["users"])
+                    preprocessed_cache["xiaohongshu"] = _preprocess_xhs_users(result["users"], keyword)
                 elif key == "jd":
                     preprocessed_cache["jd"] = _preprocess_jd_users(result["users"], keyword)
                 elif key == "taobao":

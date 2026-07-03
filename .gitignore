@@ -38,6 +38,7 @@ env/
 .env
 .env.local
 .env.*.local
+config/packaged.env
 
 # ===== 测试输出与临时产物 =====
 __pycache__/

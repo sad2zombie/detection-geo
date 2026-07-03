@@ -34,7 +34,7 @@ async function loadPollStatus() {
         const s = result.data || {};
         if (!s.configured) {
             el.textContent =
-                "远端未配置：请设置 CONSUMPTION_FETCH_URL（拉取任务）、KAFKA_BOOTSTRAP_SERVERS、KAFKA_RESULT_TOPIC（Kafka 回传）。配置后后台将每 "
+                "远端未配置：请设置 CONSUMPTION_FETCH_URL、TERMINAL_KEY（拉取任务）、KAFKA_BOOTSTRAP_SERVERS、KAFKA_RESULT_TOPIC（Kafka 回传）。配置后后台将每 "
                 + (s.poll_interval || 10)
                 + " 秒自动拉取。";
             return;

@@ -53,7 +53,7 @@ def _write_task(path: Path, data: dict) -> None:
     tmp.replace(path)
 
 
-def create_task(task_id: str, keyword: str, platforms: list[str]) -> dict:
+def create_task(task_id: str, keyword: str, platform_keys: list[str]) -> dict:
     """创建任务记录（pending）。进行中任务不可覆盖；已完成/失败任务可覆盖。"""
     path = _task_path(task_id)
     existing = _read_task(path)
@@ -62,15 +62,23 @@ def create_task(task_id: str, keyword: str, platforms: list[str]) -> dict:
         if status in _ACTIVE_STATUSES:
             raise TaskDuplicateError("该任务正在执行中")
 
+    platform_list = platform_keys if isinstance(platform_keys, list) else [platform_keys]
+    if existing and existing.get("status") not in _ACTIVE_STATUSES:
+        old_plats = list(existing.get("platform") or existing.get("platforms") or [])
+        for p in platform_list:
+            if p not in old_plats:
+                old_plats.append(p)
+        platform_list = old_plats
+
     task = {
         "task_id": task_id,
         "keyword": keyword,
-        "platforms": platforms,
+        "platform": platform_list,
         "status": "pending",
         "created_at": _now_iso() if not existing else existing.get("created_at", _now_iso()),
         "started_at": "",
         "finished_at": "",
-        "result": None,
+        "result": existing.get("result") if existing and existing.get("status") not in _ACTIVE_STATUSES else None,
         "error_message": "",
     }
     _write_task(path, task)
@@ -88,15 +96,57 @@ def set_task_running(task_id: str) -> dict:
     return task
 
 
+def _merge_detect_result(existing: dict | None, new_result: dict) -> dict:
+    """合并多次单平台 detect 结果，供任务详情页展示（results 为数组）。"""
+    new_item = new_result.get("results")
+    if not isinstance(new_item, dict):
+        return new_result
+
+    if not existing:
+        merged = dict(new_result)
+        merged["results"] = [new_item]
+        return merged
+
+    prev_items: list[dict] = []
+    prev_results = existing.get("results")
+    if isinstance(prev_results, list):
+        prev_items = list(prev_results)
+    elif isinstance(prev_results, dict):
+        prev_items = [prev_results]
+
+    platform = new_item.get("platform")
+    prev_items = [r for r in prev_items if r.get("platform") != platform]
+    prev_items.append(new_item)
+
+    merged = dict(new_result)
+    merged["results"] = prev_items
+
+    prev_errors = str(existing.get("errors") or "").strip()
+    new_errors = str(new_result.get("errors") or "").strip()
+    if prev_errors and new_errors:
+        merged["errors"] = f"{prev_errors}; {new_errors}"
+    else:
+        merged["errors"] = prev_errors or new_errors
+
+    if existing.get("status") == "failed" or new_result.get("status") == "failed":
+        merged["status"] = "failed"
+    else:
+        merged["status"] = "succeed"
+
+    return merged
+
+
 def complete_task(task_id: str, result: dict) -> dict:
     path = _task_path(task_id)
     task = _read_task(path)
     if not task:
         raise KeyError(f"任务不存在: {task_id}")
-    task["status"] = result.get("status", "succeed")
+    existing_result = task.get("result")
+    stored_result = _merge_detect_result(existing_result, result)
+    task["status"] = stored_result.get("status", "succeed")
     task["finished_at"] = _now_iso()
-    task["result"] = result
-    task["error_message"] = ""
+    task["result"] = stored_result
+    task["error_message"] = stored_result.get("errors") or ""
     _write_task(path, task)
     return task
 

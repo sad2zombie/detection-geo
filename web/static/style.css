@@ -1023,6 +1023,21 @@ td a:hover { text-shadow: 0 0 6px var(--cyan-glow); }
     border-color: var(--cyan-mid);
     box-shadow: 0 0 0 2px var(--cyan-dim);
 }
+.modal-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+}
+.modal-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--cyan);
+    cursor: pointer;
+}
 .modal-footer {
     display: flex;
     justify-content: flex-end;

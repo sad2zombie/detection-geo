@@ -19,7 +19,7 @@ async def _consumption_poll_loop():
     """后台定时向服务器拉取消费任务。"""
     if not config.CONSUMPTION_POLL_ENABLED:
         return
-    if not config.CONSUMPTION_FETCH_URL or not config.KAFKA_RESULT_TOPIC:
+    if not config.CONSUMPTION_FETCH_URL or not config.TERMINAL_KEY or not config.KAFKA_RESULT_TOPIC:
         return
     from core.consumption_worker import poll_once
 
@@ -148,25 +148,32 @@ async def api_auth_login(platform_key: str, request: Request):
     return JSONResponse(result)
 
 
-# ---------- API: 对外 detect（同步，固定启用平台全量返回）----------
+# ---------- API: 对外 detect（每次只检测一个平台）----------
 @app.post("/api/detect")
 async def api_detect(request: Request, body: dict):
-    """品牌检测统一入口：搜索完成后一次性返回聚合结果。
+    """品牌检测统一入口：每次只检测一个平台。
 
     请求体::
-        {"task_id": "...", "keyword": "西屋", "platforms": [...]}  # platforms 可选
+        {"task_id": "...", "keyword": "西屋", "platform": "official_website"}
 
     响应体::
-        {"task_id", "brand", "status", "results": [固定4平台], "errors": []}
+        {"task_id", "brand", "status", "results": {"platform", "data": {...}}, "errors": ""}
     """
     task_id = (body.get("task_id") or "").strip()
     keyword = body.get("keyword", "").strip()
-    platform_keys = config.filter_platform_keys(body.get("platforms") or [])
+    send_kafka = bool(body.get("send_kafka", False))
 
     if not task_id:
         return JSONResponse({"error": "task_id 不能为空"}, status_code=400)
     if not keyword:
         return JSONResponse({"error": "关键词不能为空"}, status_code=400)
+    if "platform" not in body or body.get("platform") in (None, "", []):
+        return JSONResponse({"error": "platform 不能为空"}, status_code=400)
+
+    try:
+        platform_key = config.normalize_platform(body.get("platform"))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
 
     from core.task_manager import (
         TaskDuplicateError,
@@ -178,7 +185,7 @@ async def api_detect(request: Request, body: dict):
     from core.search_engine import detect_brand_async, DetectBusyError
 
     try:
-        create_task(task_id, keyword, platform_keys)
+        create_task(task_id, keyword, [platform_key])
     except TaskDuplicateError as e:
         return JSONResponse({"error": str(e)}, status_code=409)
     except ValueError as e:
@@ -186,8 +193,14 @@ async def api_detect(request: Request, body: dict):
 
     set_task_running(task_id)
     try:
-        result = await detect_brand_async(keyword, platform_keys, task_id=task_id)
+        result = await detect_brand_async(keyword, platform_key, task_id=task_id)
         complete_task(task_id, result)
+        if send_kafka:
+            try:
+                from core.kafka_producer import send_result
+                await send_result(result)
+            except Exception as kafka_err:
+                print(f"[Kafka] 任务 {task_id} 回传失败（已忽略）: {kafka_err}", flush=True)
         return JSONResponse(result)
     except DetectBusyError:
         fail_task(task_id, "检测任务进行中，请稍后再试")

@@ -190,6 +190,27 @@ def has_active_local_task() -> bool:
     return False
 
 
+def _task_platform_keys(task: dict) -> list[str]:
+    plats = task.get("platform") or task.get("platforms") or []
+    if isinstance(plats, str):
+        return [plats] if plats else []
+    return [str(p) for p in plats if p]
+
+
+def has_active_local_task_for_platform(platform_key: str) -> bool:
+    """指定平台是否存在进行中的本地任务。"""
+    TASKS_DIR.mkdir(parents=True, exist_ok=True)
+    for path in TASKS_DIR.glob("*.json"):
+        if path.name.endswith(".tmp"):
+            continue
+        task = _read_task(path)
+        if not task or task.get("status") not in _ACTIVE_STATUSES:
+            continue
+        if platform_key in _task_platform_keys(task):
+            return True
+    return False
+
+
 def list_tasks(
     task_id: str | None = None,
     keyword: str | None = None,

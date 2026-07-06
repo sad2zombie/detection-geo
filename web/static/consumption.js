@@ -39,7 +39,10 @@ async function loadPollStatus() {
                 + " 秒自动拉取。";
             return;
         }
-        const busyNote = s.local_busy ? " · 本地任务执行中，暂不向服务器拉取" : "";
+        const busy = s.busy_platforms || [];
+        const busyNote = busy.length
+            ? " · 平台忙碌，暂不拉取: " + busy.join("、")
+            : "";
         const pollNote = s.poll_in_progress ? " · 消费任务处理中，暂不再拉取" : "";
         const onOff = s.poll_enabled ? "已开启" : "已关闭";
         el.textContent =

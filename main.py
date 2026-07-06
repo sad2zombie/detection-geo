@@ -44,18 +44,34 @@ if sys.platform == 'win32':
 # 确保项目根目录在 sys.path 中
 sys.path.insert(0, str(Path(__file__).parent))
 
-# ── 加载 .env 配置文件（优先级：APPDATA > 项目根目录）──
-# 打包后用户只需编辑 %APPDATA%/detection/.env 即可配置 LLM API Key 等参数
+# ── 加载 .env（packaged.env 为默认，用户 .env 非空项可覆盖）──
 import os
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 _project_root = Path(__file__).parent
 _appdata_env = Path(os.environ.get("APPDATA", "")) / "detection" / ".env"
+_packaged_env = _project_root / "config" / "packaged.env"
 
+
+def _apply_env_file(path: Path) -> None:
+    """加载 .env 文件；仅写入非空值，避免空占位覆盖已有配置。"""
+    if not path.is_file():
+        return
+    for key, value in dotenv_values(path).items():
+        if value is None:
+            continue
+        stripped = str(value).strip()
+        if stripped:
+            os.environ[key] = stripped
+
+
+# 1. 内置默认（开发 / 打包模板）
+_apply_env_file(_packaged_env)
+# 2. 用户配置（Electron 首次释放或手动编辑）
 if _appdata_env.is_file():
-    load_dotenv(_appdata_env)
+    _apply_env_file(_appdata_env)
 elif (_project_root / ".env").is_file():
-    load_dotenv(_project_root / ".env")
+    _apply_env_file(_project_root / ".env")
 
 # 创建必要的数据目录
 from config import DATA_DIR, COOKIE_DIR, RESULTS_DIR

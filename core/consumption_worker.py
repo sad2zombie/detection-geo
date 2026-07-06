@@ -14,12 +14,19 @@ from core.kafka_producer import build_empty_result, send_result
 _poll_lock = asyncio.Lock()
 
 
-def _is_local_busy() -> bool:
-    """本地检测或任务进行中时，不可向服务器拉取新任务。"""
-    from core.search_engine import is_detect_busy
-    from core.task_manager import has_active_local_task
+def _is_platform_busy(platform_key: str) -> bool:
+    """指定平台是否忙碌（本地任务或正在检测）。"""
+    from core.search_engine import is_platform_detect_busy
+    from core.task_manager import has_active_local_task_for_platform
 
-    return is_detect_busy() or has_active_local_task()
+    return (
+        has_active_local_task_for_platform(platform_key)
+        or is_platform_detect_busy(platform_key)
+    )
+
+
+def _busy_platform_keys() -> list[str]:
+    return [p for p in config.ENABLED_PLATFORM_KEYS if _is_platform_busy(p)]
 
 
 def is_poll_in_progress() -> bool:
@@ -45,7 +52,8 @@ def get_poll_status() -> dict:
             config.KAFKA_BOOTSTRAP_SERVERS
             and config.KAFKA_RESULT_TOPIC
         ),
-        "local_busy": _is_local_busy(),
+        "busy_platforms": _busy_platform_keys(),
+        "local_busy": bool(_busy_platform_keys()),
         "poll_in_progress": is_poll_in_progress(),
     }
 
@@ -111,6 +119,14 @@ async def _fetch_task(client: httpx.AsyncClient, platform_key: str) -> dict | No
     }
 
 
+async def _wait_for_detect_idle() -> None:
+    """等待其他平台检测结束（本机同时只跑一个检测）。"""
+    from core.search_engine import is_detect_busy
+
+    while is_detect_busy():
+        await asyncio.sleep(0.5)
+
+
 async def _publish_to_kafka(result: dict) -> None:
     await send_result(result)
 
@@ -160,17 +176,17 @@ async def poll_once() -> dict:
     if _poll_lock.locked():
         return {"ok": True, "fetched": False, "reason": "已有消费任务处理中，暂不再拉取"}
 
-    if _is_local_busy():
-        return {"ok": True, "fetched": False, "reason": "本地任务执行中，暂不从服务器拉取"}
-
     async with _poll_lock:
-        if _is_local_busy():
-            return {"ok": True, "fetched": False, "reason": "本地任务执行中，暂不从服务器拉取"}
-
         timeout = httpx.Timeout(30.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
             task = None
             for platform_key in config.ENABLED_PLATFORM_KEYS:
+                if _is_platform_busy(platform_key):
+                    print(
+                        f"[Consumption] 平台忙碌，跳过拉取 platform={platform_key}",
+                        flush=True,
+                    )
+                    continue
                 print(f"[Consumption] 拉取任务 platform={platform_key}", flush=True)
                 task = await _fetch_task(client, platform_key)
                 if task:
@@ -189,6 +205,7 @@ async def poll_once() -> dict:
             add_log(task_id, "入库")
 
             try:
+                await _wait_for_detect_idle()
                 result = await _run_detect(task)
                 await _publish_to_kafka(result)
                 outcome = "成功" if result.get("status") == "succeed" else "失败"

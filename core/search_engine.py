@@ -120,6 +120,7 @@ def _preprocess_douyin_users(users: list[dict], brand: str) -> list[dict] | None
             "name": u.get("name", ""),
             "profile_url": url,
             "account_id": u.get("douyin_id", ""),
+            "follower_count": u.get("follower_count", "") or "",
         })
     return result
 
@@ -141,6 +142,7 @@ def _preprocess_xhs_users(users: list[dict], brand: str) -> list[dict] | None:
             "name": u.get("name", ""),
             "profile_url": url,
             "account_id": u.get("xhs_id", ""),
+            "follower_count": u.get("follower_count", "") or "",
         })
     return result
 

@@ -98,12 +98,17 @@ async def web_search(query: str, max_results: int = 5, force_engine: str = "") -
     """
     global _baidu_blocked_until
 
-    # ── force_engine 模式：仅使用指定引擎 ──
+    # ── force_engine 模式：仅使用指定引擎（百度 HTTP 失败时仍尝试浏览器版）──
     if force_engine:
         if force_engine == "baidu":
             results = await _search_baidu(query, max_results)
-            if results and _search_results_relevant(query, results):
+            if results and not _is_error_result(results) and _search_results_relevant(query, results):
                 return _tag_engine(results, "百度")
+            if not results or _is_error_result(results):
+                print("[Baidu] HTTP 不可用，force_engine=baidu 尝试 CloakBrowser 版", flush=True)
+                results = await _search_baidu_browser(query, max_results)
+                if results and not _is_error_result(results) and _search_results_relevant(query, results):
+                    return _tag_engine(results, "百度-浏览器")
         elif force_engine == "bing":
             results = await _search_bing_html(query, max_results)
             if results and _search_results_relevant(query, results):

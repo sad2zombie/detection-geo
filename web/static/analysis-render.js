@@ -26,6 +26,7 @@
         <th style="padding:8px;">#</th>
         <th style="padding:8px;">名称</th>
         <th style="padding:8px;">${cfg.idLabel}</th>
+        <th style="padding:8px;">粉丝数</th>
         <th style="padding:8px;">主页链接</th>`;
         const rows = users.length
             ? users.map((u, i) => `
@@ -33,6 +34,7 @@
                 <td style="padding:8px;">${i + 1}</td>
                 <td style="padding:8px;">${u.name || "-"}</td>
                 <td style="padding:8px;">${u[cfg.idKey] || u.douyin_id || u.xhs_id || "-"}</td>
+                <td style="padding:8px;">${u.follower_count || "-"}</td>
                 <td style="padding:8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.profile_url ? `<a href="${u.profile_url}" data-platform="${r.platform}" class="profile-link" target="_blank">${u.profile_url}</a>` : "-"}</td>
             </tr>`).join("")
             : "";

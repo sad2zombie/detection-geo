@@ -15,6 +15,7 @@ class DetectBusyError(Exception):
 
 
 _detect_running = False
+_detect_current_platform: str | None = None
 _detect_state_lock: asyncio.Lock | None = None
 
 
@@ -28,6 +29,16 @@ def _get_detect_state_lock() -> asyncio.Lock:
 def is_detect_busy() -> bool:
     """是否有检测流程正在执行（/api/detect、任务管理、消费拉取共用）。"""
     return _detect_running
+
+
+def get_detect_current_platform() -> str | None:
+    """当前正在检测的平台 key；无检测时为 None。"""
+    return _detect_current_platform
+
+
+def is_platform_detect_busy(platform_key: str) -> bool:
+    """指定平台是否正在执行检测。"""
+    return _detect_running and _detect_current_platform == platform_key
 
 
 def _parse_follower_count(raw: str | int | float | None) -> float | None:
@@ -109,6 +120,7 @@ def _preprocess_douyin_users(users: list[dict], brand: str) -> list[dict] | None
             "name": u.get("name", ""),
             "profile_url": url,
             "account_id": u.get("douyin_id", ""),
+            "follower_count": u.get("follower_count", "") or "",
         })
     return result
 
@@ -130,6 +142,7 @@ def _preprocess_xhs_users(users: list[dict], brand: str) -> list[dict] | None:
             "name": u.get("name", ""),
             "profile_url": url,
             "account_id": u.get("xhs_id", ""),
+            "follower_count": u.get("follower_count", "") or "",
         })
     return result
 
@@ -321,7 +334,7 @@ async def detect_brand_async(
     task_id: str = "",
 ) -> dict:
     """detect 入口：每次只检测一个平台。"""
-    global _detect_running
+    global _detect_running, _detect_current_platform
     from config import DETECT_TOTAL_TIMEOUT_SECONDS, DETECT_PLATFORM_TIMEOUT_SECONDS, normalize_platform
 
     platform_key = normalize_platform(platform_key)
@@ -330,6 +343,7 @@ async def detect_brand_async(
         if _detect_running:
             raise DetectBusyError()
         _detect_running = True
+        _detect_current_platform = platform_key
 
     try:
         errors: list[dict] = []
@@ -361,6 +375,7 @@ async def detect_brand_async(
     finally:
         async with _get_detect_state_lock():
             _detect_running = False
+            _detect_current_platform = None
 
 
 def _preprocess_official_website(users: list[dict]) -> dict | None:

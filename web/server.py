@@ -99,6 +99,33 @@ async def terminal_page(request: Request):
     return templates.TemplateResponse(request, "terminal.html", {})
 
 
+@app.get("/logs", response_class=HTMLResponse)
+async def logs_page(request: Request):
+    return templates.TemplateResponse(request, "logs.html", {})
+
+
+# ---------- API: 运行日志 ----------
+@app.get("/api/logs")
+async def api_logs(lines: int = 500):
+    """读取运行时日志文件末尾 N 行。"""
+    from core.runtime_log import RUNTIME_LOG_FILE
+
+    if not RUNTIME_LOG_FILE.is_file():
+        return JSONResponse({"lines": [], "total": 0})
+
+    lines = max(10, min(lines, 5000))
+    try:
+        with open(RUNTIME_LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
+            all_lines = f.readlines()
+        tail = all_lines[-lines:] if len(all_lines) > lines else all_lines
+        return JSONResponse({
+            "lines": [l.rstrip("\n") for l in tail],
+            "total": len(all_lines),
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # ---------- API: 登录状态 ----------
 @app.get("/api/auth/status")
 async def api_auth_status(refresh: bool = False):

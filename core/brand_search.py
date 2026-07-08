@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""品牌官网查询（一级信源）—— 分平台搜索 + 规则提取 + 大模型兜底。
+"""品牌官网查询（一级信源）—— 查询词优先 + 分平台降级 + 规则提取 + 大模型兜底。
 
 核心流程：
-1. 百度：固定搜索「官网」「品牌」→ 规则策略1/2 提取
-2. Bing：同上
-3. 博查 API：同上（需 BOCHA_API_KEY）
+1. 查询「品牌名」：百度 → Bing → 博查 → 每次结果立即规则匹配
+2. 查询「品牌名官网」：同上
+3. 查询「品牌名品牌」：同上
 4. 大模型兜底（需 LLM_API_KEY）
 """
 
@@ -52,24 +52,8 @@ def get_cached_brand_result() -> dict | None:
 _SEARCH_SUFFIXES = ("官网", "品牌")
 
 
-async def _search_on_platform(brand_name: str, engine: str, platform_label: str) -> list[dict]:
-    """在指定平台用固定关键词搜索，返回带 _engine 的结果列表。"""
-    collected: list[dict] = []
-    for suffix in _SEARCH_SUFFIXES:
-        query = f"{brand_name} {suffix}"
-        print(f"[Brand][{platform_label}] 搜索: {query}", flush=True)
-        results = await web_search(query, max_results=5, force_engine=engine)
-        if results and not _is_error_results(results):
-            collected.extend(results)
-            engine_tag = results[0].get("_engine", platform_label)
-            print(f"[Brand][{platform_label}] 完成: {len(results)} 条有效结果 (_engine={engine_tag})", flush=True)
-        else:
-            print(f"[Brand][{platform_label}] 完成: 0 条有效结果", flush=True)
-    return collected
-
-
 async def _pipeline_search(brand_name: str) -> dict:
-    """分平台流水线：百度 → Bing → 博查 → 大模型。"""
+    """查询词优先流水线：品牌名 → 品牌名+官网 → 品牌名+品牌，每个查询跑完平台降级链后立即规则匹配。"""
     print(f"[Brand] 开始查询品牌官网: {brand_name}", flush=True)
 
     stages: list[tuple[str, str]] = [
@@ -81,18 +65,29 @@ async def _pipeline_search(brand_name: str) -> dict:
     else:
         print("[Brand] BOCHA_API_KEY 未配置，跳过博查阶段", flush=True)
 
-    for platform_label, engine in stages:
-        print(f"[Brand] ── 阶段 {platform_label} ──", flush=True)
-        stage_results = await _search_on_platform(brand_name, engine, platform_label)
-        result = await _synthesize_brand_answer(brand_name, stage_results, allow_llm_fallback=False)
-        if result.get("website") and result["website"] != "未找到":
-            print(
-                f"[Brand] 在 {platform_label} 阶段命中官网: {result['website']} "
-                f"(来源: {result.get('source', '-')})",
-                flush=True,
-            )
-            return result
-        print(f"[Brand][{platform_label}] 规则未匹配到官网，进入下一阶段", flush=True)
+    # 搜索词顺序：品牌名 → 品牌名+官网 → 品牌名+品牌
+    queries = [brand_name] + [f"{brand_name}{s}" for s in _SEARCH_SUFFIXES]
+
+    for query in queries:
+        print(f"[Brand] ── 查询: {query} ──", flush=True)
+        for platform_label, engine in stages:
+            print(f"[Brand][{platform_label}] 搜索: {query}", flush=True)
+            results = await web_search(query, max_results=5, force_engine=engine)
+            if results and not _is_error_results(results):
+                engine_tag = results[0].get("_engine", platform_label)
+                print(f"[Brand][{platform_label}] 完成: {len(results)} 条有效结果 (_engine={engine_tag})", flush=True)
+                # 每次搜索结果立即交给规则引擎
+                result = await _synthesize_brand_answer(brand_name, results, allow_llm_fallback=False)
+                if result.get("website") and result["website"] != "未找到":
+                    print(
+                        f"[Brand] 在 {platform_label} 命中官网: {result['website']} "
+                        f"(来源: {result.get('source', '-')})",
+                        flush=True,
+                    )
+                    return result
+            else:
+                print(f"[Brand][{platform_label}] 完成: 0 条有效结果", flush=True)
+        print(f"[Brand] 查询 '{query}' 未命中，进入下一个查询", flush=True)
 
     if config.LLM_API_KEY:
         print("[Brand] ── 阶段 大模型 ──", flush=True)
@@ -102,7 +97,7 @@ async def _pipeline_search(brand_name: str) -> dict:
     else:
         print("[Brand] LLM_API_KEY 未配置，跳过大模型阶段", flush=True)
 
-    print("[Brand] 四个平台均未找到官网", flush=True)
+    print("[Brand] 所有查询均未找到官网", flush=True)
     return {
         "brand_name": brand_name,
         "website": "未找到",

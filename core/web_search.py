@@ -464,7 +464,7 @@ async def _search_bing_browser(query: str, max_results: int = 5) -> list[dict]:
     try:
         from core.browser_manager import get_browser_manager
         from config import COOKIE_DIR
-        bing_profile = str(COOKIE_DIR / "baidu_profile")  # 复用 baidu_profile
+        bing_profile = str(COOKIE_DIR / "bing_profile")
 
         bm = get_browser_manager()
         async with bm.acquire_page(bing_profile, headless=True) as page_ctx:

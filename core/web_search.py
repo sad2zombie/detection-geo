@@ -396,6 +396,10 @@ def _attach_snippets_by_position(html: str, results: list[dict]) -> None:
 
     # 1. class 模式 snippet（带位置）
     snippet_patterns = [
+        # 新版百度 cosc 组件布局
+        re.compile(r'<span[^>]*class="[^"]*summary-text[^"]*"[^>]*>(.*?)</span>', re.DOTALL),
+        re.compile(r'<div[^>]*class="[^"]*summary-gap[^"]*"[^>]*>(.*?)</div>', re.DOTALL),
+        # 旧版百度布局
         re.compile(r'<span[^>]*class="[^"]*c-abstract[^"]*"[^>]*>(.*?)</span>', re.DOTALL),
         re.compile(r'<span[^>]*class="[^"]*content-right[^"]*"[^>]*>(.*?)</span>', re.DOTALL),
         re.compile(r'<div[^>]*class="[^"]*c-abstract[^"]*"[^>]*>(.*?)</div>', re.DOTALL),
@@ -460,7 +464,7 @@ async def _search_bing_browser(query: str, max_results: int = 5) -> list[dict]:
     try:
         from core.browser_manager import get_browser_manager
         from config import COOKIE_DIR
-        bing_profile = str(COOKIE_DIR / "baidu_profile")  # 复用 baidu_profile
+        bing_profile = str(COOKIE_DIR / "bing_profile")
 
         bm = get_browser_manager()
         async with bm.acquire_page(bing_profile, headless=True) as page_ctx:
@@ -589,6 +593,12 @@ async def _search_baidu(query: str, max_results: int = 5) -> list[dict]:
             r'<h3[^>]*class="[^"]*t[^"]*"[^>]*>.*?<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>',
             re.DOTALL,
         )
+        # 提取结果容器上的 mu 属性（新版百度直接给出真实 URL）
+        mu_pattern = re.compile(
+            r'<div[^>]*class="[^"]*result\s+c-container[^"]*"[^>]*\bmu="([^"]*)"',
+        )
+        mu_entries = [(m.start(), m.group(1)) for m in mu_pattern.finditer(html)]
+
         total_h3 = 0
         filtered_ad = 0
         for m in h3_pattern.finditer(html):
@@ -612,6 +622,22 @@ async def _search_baidu(query: str, max_results: int = 5) -> list[dict]:
 
         if results:
             await _resolve_baidu_redirects(results)
+
+        # mu 属性回退：跳转解析失败时，用最近的 mu 值作为真实 URL
+        if mu_entries:
+            for r in results:
+                url = r.get("url", "")
+                if "baidu.com/link" in url or "baidu.com/rec" in url:
+                    rpos = r.get("_pos", 0)
+                    best_mu = None
+                    for mpos, mu_url in mu_entries:
+                        if mpos <= rpos:
+                            best_mu = mu_url
+                        else:
+                            break
+                    if best_mu:
+                        print(f"[Baidu] mu 回退: {url[:50]}... → {best_mu}", flush=True)
+                        r["url"] = best_mu
         print(f"[Baidu] 解析到 {len(results)} 条结果", flush=True)
 
         _attach_snippets_by_position(html, results)

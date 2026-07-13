@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-"""品牌官网查询（一级信源）—— 分平台搜索 + 规则提取 + 大模型兜底。
+"""品牌官网查询（一级信源）—— 查询词优先 + 分平台降级 + 规则提取 + 大模型兜底。
 
 核心流程：
-1. 百度：固定搜索「官网」「品牌」→ 规则策略1/2 提取
-2. Bing：同上
-3. 博查 API：同上（需 BOCHA_API_KEY）
+1. 查询「品牌名」：百度 → Bing → 博查 → 每次结果立即规则匹配
+2. 查询「品牌名官网」：同上
+3. 查询「品牌名品牌」：同上
 4. 大模型兜底（需 LLM_API_KEY）
 """
 
+import asyncio
 import json
 import re
 import httpx
@@ -52,26 +53,22 @@ def get_cached_brand_result() -> dict | None:
 _SEARCH_SUFFIXES = ("官网", "品牌")
 
 
-async def _search_on_platform(brand_name: str, engine: str, platform_label: str) -> list[dict]:
-    """在指定平台用固定关键词搜索，返回带 _engine 的结果列表。"""
-    collected: list[dict] = []
-    for suffix in _SEARCH_SUFFIXES:
-        query = f"{brand_name} {suffix}"
-        print(f"[Brand][{platform_label}] 搜索: {query}", flush=True)
-        results = await web_search(query, max_results=5, force_engine=engine)
-        if results and not _is_error_results(results):
-            collected.extend(results)
-            engine_tag = results[0].get("_engine", platform_label)
-            print(f"[Brand][{platform_label}] 完成: {len(results)} 条有效结果 (_engine={engine_tag})", flush=True)
-        else:
-            print(f"[Brand][{platform_label}] 完成: 0 条有效结果", flush=True)
-    return collected
-
-
 async def _pipeline_search(brand_name: str) -> dict:
-    """分平台流水线：百度 → Bing → 博查 → 大模型。"""
+    """查询流水线：先大模型 → 再搜索平台（百度 → Bing → 博查），每个平台逐查询词匹配。"""
     print(f"[Brand] 开始查询品牌官网: {brand_name}", flush=True)
 
+    # ── 阶段 1：大模型优先 ──
+    if config.LLM_API_KEY:
+        print("[Brand] ── 阶段 大模型（优先） ──", flush=True)
+        llm_result = await _llm_fallback(brand_name)
+        if llm_result and llm_result.get("website") and llm_result["website"] != "未找到":
+            print(f"[Brand] 大模型命中官网: {llm_result['website']}", flush=True)
+            return llm_result
+        print("[Brand] 大模型未命中，进入搜索平台阶段", flush=True)
+    else:
+        print("[Brand] LLM_API_KEY 未配置，跳过大模型阶段", flush=True)
+
+    # ── 阶段 2：搜索平台降级链 ──
     stages: list[tuple[str, str]] = [
         ("百度", "baidu"),
         ("Bing", "bing"),
@@ -81,28 +78,27 @@ async def _pipeline_search(brand_name: str) -> dict:
     else:
         print("[Brand] BOCHA_API_KEY 未配置，跳过博查阶段", flush=True)
 
-    for platform_label, engine in stages:
-        print(f"[Brand] ── 阶段 {platform_label} ──", flush=True)
-        stage_results = await _search_on_platform(brand_name, engine, platform_label)
-        result = await _synthesize_brand_answer(brand_name, stage_results, allow_llm_fallback=False)
-        if result.get("website") and result["website"] != "未找到":
-            print(
-                f"[Brand] 在 {platform_label} 阶段命中官网: {result['website']} "
-                f"(来源: {result.get('source', '-')})",
-                flush=True,
-            )
-            return result
-        print(f"[Brand][{platform_label}] 规则未匹配到官网，进入下一阶段", flush=True)
+    for query in [brand_name] + [f"{brand_name}{s}" for s in _SEARCH_SUFFIXES]:
+        print(f"[Brand] ── 查询: {query} ──", flush=True)
+        for platform_label, engine in stages:
+            print(f"[Brand][{platform_label}] 搜索: {query}", flush=True)
+            results = await web_search(query, max_results=5, force_engine=engine)
+            if results and not _is_error_results(results):
+                engine_tag = results[0].get("_engine", platform_label)
+                print(f"[Brand][{platform_label}] 完成: {len(results)} 条有效结果 (_engine={engine_tag})", flush=True)
+                result = await _synthesize_brand_answer(brand_name, results, allow_llm_fallback=False)
+                if result.get("website") and result["website"] != "未找到":
+                    print(
+                        f"[Brand] 在 {platform_label} 命中官网: {result['website']} "
+                        f"(来源: {result.get('source', '-')})",
+                        flush=True,
+                    )
+                    return result
+            else:
+                print(f"[Brand][{platform_label}] 完成: 0 条有效结果", flush=True)
+        print(f"[Brand] 查询 '{query}' 未命中，进入下一个查询", flush=True)
 
-    if config.LLM_API_KEY:
-        print("[Brand] ── 阶段 大模型 ──", flush=True)
-        llm_result = await _llm_fallback(brand_name)
-        if llm_result:
-            return llm_result
-    else:
-        print("[Brand] LLM_API_KEY 未配置，跳过大模型阶段", flush=True)
-
-    print("[Brand] 四个平台均未找到官网", flush=True)
+    print("[Brand] 所有阶段均未找到官网", flush=True)
     return {
         "brand_name": brand_name,
         "website": "未找到",
@@ -178,6 +174,25 @@ def _extract_brand_tokens(brand_name: str) -> list[str]:
     for t in (core, orig):
         if len(t) >= 2 and t not in tokens:
             tokens.append(t)
+
+    # 拆分子词：将中文+英文混合的品牌名拆分
+    # 例如 "火山全域GEO" → ["火山", "全域", "GEO"]
+    sub_tokens = []
+    if core and len(core) >= 4:
+        # 提取连续的中文部分和英文部分
+        parts = re.findall(r'[\u4e00-\u9fff]+|[a-zA-Z]+', core)
+        for part in parts:
+            if len(part) >= 2 and part not in tokens and part not in sub_tokens:
+                sub_tokens.append(part)
+        # 对于较长的中文部分，进一步拆分为2字词组
+        for part in parts:
+            if re.match(r'^[\u4e00-\u9fff]+$', part) and len(part) >= 4:
+                for i in range(0, len(part) - 1, 2):
+                    sub_token = part[i:i+2]
+                    if sub_token not in tokens and sub_token not in sub_tokens:
+                        sub_tokens.append(sub_token)
+
+    tokens.extend(sub_tokens)
     return tokens or [orig]
 
 
@@ -266,7 +281,7 @@ async def _synthesize_brand_answer(
             return url
         if "duckduckgo.com/l/" in url and "uddg=" in url:
             from urllib.parse import parse_qs, urlparse as _up
-            parsed = _up(url if "://" in url else "https:" + url)
+            parsed = _up(url if "://" in url else "https://" + url)
             qs = parse_qs(parsed.query)
             uddg = qs.get("uddg", [None])[0]
             if uddg:
@@ -370,6 +385,15 @@ async def _synthesize_brand_answer(
             if bad in title:
                 score -= 4.0
                 break
+        # 无关业务关键词扣分（表明不是官网，而是第三方平台/代理商）
+        _irrelevant_keywords = (
+            "cps", "返利", "发单机器人", "私域群", "私域运营", "代运营",
+            "招商加盟", "加盟", "代理", "分销", "淘客", "刷单", "薅羊毛",
+        )
+        for kw in _irrelevant_keywords:
+            if kw in title or kw in r.get("snippet", ""):
+                score -= 6.0
+                break
         if _is_aggregation_title(title):
             score -= 8.0
         if title and title[0].isdigit():
@@ -395,12 +419,19 @@ async def _synthesize_brand_answer(
             elif len(_parts) >= 2:
                 _body = _parts[0]
             if _body:
-                _full = ''.join(lazy_pinyin(bn)).lower()
-                _initial = ''.join(p[0] for p in lazy_pinyin(bn) if p).lower()
+                # 逐字检查：每个品牌字的拼音是否在域名中
+                _pinyin_chars = lazy_pinyin(bn)
+                _matched_chars = sum(1 for p in _pinyin_chars if p and p in _body)
+                if _matched_chars > 0:
+                    # 按比例加分：匹配字数/总字数 * 5 分
+                    score += (_matched_chars / len(_pinyin_chars)) * 5.0
+                # 完整拼音匹配额外加分
+                _full = ''.join(_pinyin_chars).lower()
+                _initial = ''.join(p[0] for p in _pinyin_chars if p).lower()
                 _match_full = _full and (_full in _body or _body in _full)
                 _match_initial = len(_initial) >= 2 and _initial == _body
                 if _match_full or _match_initial:
-                    score += 5.0
+                    score += 5.0  # 额外加分
         except Exception:
             pass
         return score
@@ -412,6 +443,12 @@ async def _synthesize_brand_answer(
             _title_contains_brand(r["title"], brand_tokens)
             and _is_official_website_candidate(r["url"])
         )
+
+    # 调试：打印每条结果的得分
+    print(f"[Brand][调试] 共 {len(parsed_results)} 条结果进入评分:", flush=True)
+    for r in parsed_results:
+        score = _brand_relevance(r)
+        print(f"[Brand][调试]   标题: {r['title'][:60]}  URL: {r['url'][:40]}  得分: {score:.1f}", flush=True)
 
     # ── 找官网 URL ──
     website = "未找到"
@@ -462,6 +499,51 @@ async def _synthesize_brand_answer(
                 print(f"[Brand] 策略2匹配(最佳相关度): {best_primary['title'][:50]} → {website}", flush=True)
             else:
                 print(f"[Brand] 策略2跳过: 最高相关度 {_brand_relevance(best_primary):.1f} 低于阈值", flush=True)
+
+    # 策略 3: URL 拼音匹配（最强信号）
+    if website == "未找到":
+        try:
+            from pypinyin import lazy_pinyin
+            _brand_pinyin = ''.join(lazy_pinyin(brand_name_clean)).lower()
+            _brand_initials = ''.join(p[0] for p in lazy_pinyin(brand_name_clean) if p).lower()
+
+            pinyin_candidates = []
+            for r in parsed_results:
+                if not _is_primary_domain(r["url"]):
+                    continue
+                if not _passes_brand_gate(r):
+                    continue
+
+                # 提取域名主体
+                _host = (urlparse(r["url"] if '://' in r["url"] else 'https://' + r["url"]).hostname or '').lower()
+                _parts = _host.split('.')
+                if _parts and _parts[0] == 'www':
+                    _parts = _parts[1:]
+                _double = {'com.cn', 'net.cn', 'org.cn', 'gov.cn', 'co.jp', 'co.uk', 'com.hk'}
+                _body = ''
+                if len(_parts) >= 2 and '.'.join(_parts[-2:]) in _double:
+                    _body = _parts[0]
+                elif len(_parts) >= 2:
+                    _body = _parts[0]
+
+                if not _body:
+                    continue
+
+                # 检查域名是否匹配品牌拼音
+                _match_full = _brand_pinyin and (_brand_pinyin in _body or _body in _brand_pinyin)
+                _match_initial = len(_brand_initials) >= 2 and _brand_initials == _body
+
+                if _match_full or _match_initial:
+                    pinyin_candidates.append(r)
+
+            if pinyin_candidates:
+                # 拼音匹配中，选标题相关度最高的
+                best_pinyin = max(pinyin_candidates, key=_brand_relevance)
+                website = best_pinyin["url"]
+                website_item = best_pinyin
+                print(f"[Brand] 策略 3 匹配 (URL 拼音): {best_pinyin['title'][:50]} → {website}", flush=True)
+        except Exception as e:
+            print(f"[Brand] 策略 3 异常：{e}", flush=True)
 
     # ── URL 归一化：仅企业官网首页保留 scheme+host ──
     if website and website != "未找到":
@@ -598,52 +680,260 @@ async def _fetch_official_description(url: str) -> str | None:
 
 # ─────────────────────────── 辅助函数 ───────────────────────────
 
+_LLM_BRAND_SYSTEM_PROMPT = (
+    "你是一个品牌信息查询助手。用户会给你一个品牌名称，"
+    "请你输出相关品牌信息，品牌的官方网站URL和简要介绍。\n"
+    "要求：\n"
+    "1. 不要编造结果，不确定或者没有证据的都需要如实回答\n"
+    "2. 返回的域名必须完整（如：www.xxx.com），而且域名中的xxx不可能为中文\n"
+    "3. 只能返回JSON格式：{\"brand_name\": \"...\", \"website\": \"...\", \"description\": \"...\"}"
+)
+
+
+_LLM_NOT_FOUND_MARKERS = frozenset({
+    "未找到", "无", "未知", "没有", "查不到", "无法确定",
+    "n/a", "null", "none", "not found", "unknown",
+})
+
+
+def _is_llm_not_found(website: str) -> bool:
+    """模型明确表示未找到官网（含空值）。"""
+    if not website or not website.strip():
+        return True
+    return website.strip().lower() in _LLM_NOT_FOUND_MARKERS
+
+
+def _is_valid_llm_website(website: str) -> bool:
+    """校验大模型返回的官网 URL，拒绝中文域名和明显无效格式。"""
+    if _is_llm_not_found(website):
+        return False
+    url = website.strip()
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    host = (urlparse(url).hostname or "").lower()
+    if not host:
+        return False
+    if re.search(r"[\u4e00-\u9fff]", host):
+        return False
+    if _is_ugc_host(url) or _is_search_engine_host(url):
+        return False
+    return bool(re.match(
+        r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$",
+        host,
+    ))
+
+
+def _normalize_llm_website(website: str) -> str:
+    """补全 scheme，去掉路径，归一化为首页 URL。"""
+    url = website.strip()
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    parsed = urlparse(url)
+    if parsed.scheme and parsed.netloc:
+        return urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
+    return url
+
+
+async def _verify_page_content(website: str, brand_name: str) -> bool | None:
+    """页面内容验证：访问 URL，检查 title/meta 中是否包含品牌名。
+
+    Returns:
+        True  - 页面可访问且包含品牌名
+        False - 页面可访问但未匹配品牌名（可疑）
+        None  - 无法访问页面（403/超时/网络错误），结果不确定
+    """
+    url = website.strip()
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    _UA = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=5, follow_redirects=True) as client:
+            resp = await client.get(url, headers=_UA)
+            if resp.status_code == 403 or resp.status_code == 429:
+                print(f"[Brand][验证] 页面被拦截 {resp.status_code}，跳过页面验证: {url}", flush=True)
+                return None  # None 表示"无法判断"，交给交叉验证决定
+            if resp.status_code < 200 or resp.status_code >= 400:
+                print(f"[Brand][验证] 页面状态异常 {resp.status_code}: {url}", flush=True)
+                return False
+
+            # 只取前 2KB，title/meta 都在头部
+            html = resp.text[:2048]
+
+        # 提取 title
+        title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+        title = title_match.group(1).strip() if title_match else ""
+
+        # 提取 meta description
+        desc_match = re.search(
+            r'<meta[^>]+(?:name=["\']description["\']|property=["\']og:description["\'])[^>]+content=["\']([^"\']*)["\']',
+            html, re.IGNORECASE,
+        )
+        if not desc_match:
+            desc_match = re.search(
+                r'<meta[^>]+content=["\']([^"\']*)["\'][^>]+(?:name=["\']description["\']|property=["\']og:description["\'])',
+                html, re.IGNORECASE,
+            )
+        description = desc_match.group(1).strip() if desc_match else ""
+
+        check_text = f"{title} {description}".lower()
+        brand_lower = brand_name.lower()
+
+        if brand_lower in check_text:
+            print(f"[Brand][验证] 页面内容通过: {url} (title={title!r})", flush=True)
+            return True
+
+        print(f"[Brand][验证] 页面内容未匹配品牌名: {url} (title={title!r})", flush=True)
+        return False
+
+    except httpx.TimeoutException:
+        print(f"[Brand][验证] 页面超时: {url}", flush=True)
+        return False
+    except Exception as e:
+        print(f"[Brand][验证] 页面请求失败: {url} ({e})", flush=True)
+        return False
+
+
+async def _verify_search_cross_reference(website: str, brand_name: str) -> bool:
+    """搜索引擎交叉验证：百度搜索品牌名，检查结果中是否包含该域名。"""
+    url = website.strip()
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    target_host = (urlparse(url).hostname or "").lower()
+
+    try:
+        results = await web_search(brand_name, max_results=10, force_engine="baidu")
+        for r in results:
+            result_url = r.get("url", "")
+            result_host = (urlparse(result_url).hostname or "").lower()
+            if result_host and target_host and (
+                result_host == target_host
+                or result_host.endswith("." + target_host)
+                or target_host.endswith("." + result_host)
+            ):
+                print(f"[Brand][验证] 交叉验证通过: {target_host} 出现在百度结果中", flush=True)
+                return True
+
+        print(f"[Brand][验证] 交叉验证未匹配: {target_host} 未出现在百度前10条结果中", flush=True)
+        return False
+
+    except Exception as e:
+        print(f"[Brand][验证] 交叉验证异常: {e}", flush=True)
+        return False
+
+
+async def _llm_query_once(brand_name: str, query: str, query_index: int = 0) -> tuple[dict | None, bool]:
+    """单次大模型品牌官网查询。
+
+    Args:
+        brand_name: 品牌名
+        query: 查询语句
+        query_index: 问法序号，0 表示第一问法（会做交叉验证）
+
+    Returns:
+        (result, stop): stop=True 表示模型明确未找到，无需再换问法查询。
+    """
+    response = await llm_chat(
+        messages=[
+            {"role": "system", "content": _LLM_BRAND_SYSTEM_PROMPT},
+            {"role": "user", "content": query},
+        ],
+        max_tokens=500,
+        temperature=0,
+        extra_body={"enable_search": True},
+    )
+
+    content = response.get("content", "").strip()
+
+    # 尝试多种策略提取 JSON
+    data = None
+
+    # 策略1: 直接解析整个内容
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        pass
+
+    # 策略2: 从 markdown 代码块中提取
+    if data is None:
+        code_block_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
+        if code_block_match:
+            try:
+                data = json.loads(code_block_match.group(1))
+            except json.JSONDecodeError:
+                pass
+
+    # 策略3: 找到第一个 { 和最后一个 } 之间的内容
+    if data is None:
+        first_brace = content.find('{')
+        last_brace = content.rfind('}')
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            json_str = content[first_brace:last_brace + 1]
+            try:
+                data = json.loads(json_str)
+            except json.JSONDecodeError:
+                pass
+
+    if data is None:
+        print(f"[Brand][大模型] 返回格式异常 (query={query!r}): {content[:200]}", flush=True)
+        return None, False
+    website = (data.get("website") or "").strip()
+    description = (data.get("description") or "").strip()
+    if _is_llm_not_found(website):
+        print(f"[Brand][大模型] 未找到 (query={query!r})", flush=True)
+        return None, True
+
+    if not _is_valid_llm_website(website):
+        print(f"[Brand][大模型] 无效官网已丢弃 (query={query!r}): {website!r}", flush=True)
+        return None, False
+
+    # 并行验证：页面内容验证 + 搜索引擎交叉验证（仅第一问法）
+    tasks = [_verify_page_content(website, brand_name)]
+    if query_index == 0:
+        tasks.append(_verify_search_cross_reference(website, brand_name))
+
+    verify_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for vr in verify_results:
+        if isinstance(vr, Exception) or vr is False:
+            print(f"[Brand][大模型] 验证未通过 (query={query!r}): {website!r}", flush=True)
+            return None, False
+        # vr is None 表示页面验证被跳过（403/429），不算失败
+
+    website = _normalize_llm_website(website)
+    print(f"[Brand][大模型] 命中 (query={query!r}): {website}", flush=True)
+    return {
+        "brand_name": brand_name,
+        "website": website,
+        "description": description,
+        "source": SOURCE_LLM,
+        "error": "",
+    }, False
+
 
 async def _llm_fallback(brand_name: str) -> dict | None:
     """各搜索平台均未命中时，调用大模型直接回答品牌官网。"""
+    queries = [
+        f"{brand_name}的官网",
+        f"{brand_name} 官方网站",
+        brand_name,
+    ]
     try:
-        print(f"[Brand][大模型] 查询: {brand_name}", flush=True)
-        response = await llm_chat(
-            messages=[
-                {"role": "system", "content": (
-                    "你是一个品牌信息查询助手。用户会给你一个品牌名称，"
-                    "请根据你的知识直接回答该品牌的官方网站URL和简要介绍。\n"
-                    "要求：\n"
-                    "1. website 必须是该品牌的官方网站URL（如 https://www.xxx.com），不确定就填“未找到”\n"
-                    "2. description 用100字以内概括品牌的核心业务和行业\n"
-                    "3. 不要编造，不确定就诚实回答\n"
-                    "4. 只返回JSON格式：{\"brand_name\": \"...\", \"website\": \"...\", \"description\": \"...\"}"
-                )},
-                {"role": "user", "content": brand_name},
-            ],
-            temperature=0.3,
-            max_tokens=500,
-        )
-
-        content = response.get("content", "").strip()
-        # 尝试解析 JSON
-        json_match = re.search(r'\{[^{}]+\}', content)
-        if json_match:
-            data = json.loads(json_match.group())
-            website = data.get("website", "未找到")
-            description = data.get("description", "")
-            if website and website != "未找到":
-                print(f"[Brand][大模型] 找到官网: {website}", flush=True)
-                return {
-                    "brand_name": brand_name,
-                    "website": website,
-                    "description": description,
-                    "source": SOURCE_LLM,
-                    "error": "",
-                }
-            else:
-                print("[Brand][大模型] 未找到该品牌官网", flush=True)
-        else:
-            print("[Brand][大模型] 返回格式异常", flush=True)
-
+        for i, query in enumerate(queries):
+            print(f"[Brand][大模型] 查询: {query}", flush=True)
+            result, stop = await _llm_query_once(brand_name, query, query_index=i)
+            if result:
+                return result
+            if stop:
+                print("[Brand][大模型] 模型返回未找到，跳过后续大模型查询", flush=True)
+                break
     except Exception as e:
         print(f"[Brand][大模型] 调用失败: {e}", flush=True)
-
     return None
 
 

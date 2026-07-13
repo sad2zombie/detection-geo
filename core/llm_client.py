@@ -19,6 +19,7 @@ async def llm_chat(
     temperature: float = 0.7,
     max_tokens: int = 4096,
     timeout: float = 120.0,
+    extra_body: dict | None = None,
 ) -> dict:
     """
     调用 LLM Chat Completion API（非流式，支持 Function Calling）。
@@ -41,6 +42,9 @@ async def llm_chat(
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = tool_choice
+
+    if extra_body:
+        payload.update(extra_body)
 
     max_retries = 2
     last_error = None

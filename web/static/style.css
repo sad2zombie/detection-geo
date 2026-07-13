@@ -7,19 +7,19 @@
 
 /* --- CSS Variables / Design Tokens --- */
 :root {
-    /* 背景层 */
-    --bg-void: #03030a;
-    --bg-deep: #050510;
-    --bg-card: rgba(8, 10, 28, 0.72);
+    /* 背景层 — 提亮 */
+    --bg-void: #08081a;
+    --bg-deep: #0c0c24;
+    --bg-card: rgba(14, 18, 42, 0.78);
 
     /* 主色调 — 电光青 + 霓虹紫 */
     --cyan: #00f5ff;
-    --cyan-dim: rgba(0, 245, 255, 0.12);
-    --cyan-mid: rgba(0, 245, 255, 0.25);
-    --cyan-glow: rgba(0, 245, 255, 0.55);
+    --cyan-dim: rgba(0, 245, 255, 0.15);
+    --cyan-mid: rgba(0, 245, 255, 0.30);
+    --cyan-glow: rgba(0, 245, 255, 0.60);
     --purple: #bf5af2;
-    --purple-dim: rgba(191, 90, 242, 0.12);
-    --purple-glow: rgba(191, 90, 242, 0.55);
+    --purple-dim: rgba(191, 90, 242, 0.15);
+    --purple-glow: rgba(191, 90, 242, 0.60);
 
     /* 语义色 */
     --success: #39ff14;      /* 霓虹绿 */
@@ -32,9 +32,9 @@
     --text-dim: #6a7a9a;
     --text-muted: #3d4a66;
 
-    /* 边框 */
-    --border: rgba(0, 245, 255, 0.15);
-    --border-bright: rgba(0, 245, 255, 0.45);
+    /* 边框 — 提亮 */
+    --border: rgba(0, 245, 255, 0.20);
+    --border-bright: rgba(0, 245, 255, 0.50);
 
     /* 间距 & 圆角 */
     --radius: 4px;
@@ -66,17 +66,17 @@ body {
 
 .bg-gradient {
     background:
-        radial-gradient(ellipse 100% 80% at 10% -15%, var(--bg-glow-a, rgba(191, 90, 242, 0.25)) 0%, transparent 58%),
-        radial-gradient(ellipse 85% 65% at 92% 105%, var(--bg-glow-b, rgba(0, 245, 255, 0.2)) 0%, transparent 52%),
-        radial-gradient(ellipse 55% 45% at 48% 42%, var(--bg-glow-c, rgba(120, 80, 255, 0.1)) 0%, transparent 65%),
-        linear-gradient(155deg, var(--bg-base-a, #03030a) 0%, var(--bg-base-b, #0a0820) 48%, var(--bg-base-c, #050510) 100%);
+        radial-gradient(ellipse 100% 80% at 10% -15%, var(--bg-glow-a, rgba(191, 90, 242, 0.35)) 0%, transparent 58%),
+        radial-gradient(ellipse 85% 65% at 92% 105%, var(--bg-glow-b, rgba(0, 245, 255, 0.30)) 0%, transparent 52%),
+        radial-gradient(ellipse 55% 45% at 48% 42%, var(--bg-glow-c, rgba(120, 80, 255, 0.18)) 0%, transparent 65%),
+        linear-gradient(155deg, var(--bg-base-a, #08081a) 0%, var(--bg-base-b, #10102e) 48%, var(--bg-base-c, #0c0c24) 100%);
     transition: background 1.4s ease;
 }
 
 .bg-grid {
     background-image:
-        linear-gradient(var(--bg-grid-color, rgba(0, 245, 255, 0.04)) 1px, transparent 1px),
-        linear-gradient(90deg, var(--bg-grid-color, rgba(0, 245, 255, 0.04)) 1px, transparent 1px);
+        linear-gradient(var(--bg-grid-color, rgba(0, 245, 255, 0.07)) 1px, transparent 1px),
+        linear-gradient(90deg, var(--bg-grid-color, rgba(0, 245, 255, 0.07)) 1px, transparent 1px);
     background-size: 56px 56px;
     mask-image: radial-gradient(ellipse 95% 90% at 50% 45%, black 30%, transparent 85%);
     opacity: 0.85;
@@ -431,7 +431,7 @@ header .subtitle::after {
     padding: 13px 18px;
     border-radius: var(--radius);
     border: 1px solid var(--border);
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(6, 10, 24, 0.50);
     color: var(--text);
     font-family: 'Rajdhani', sans-serif;
     font-size: 16px;
@@ -449,7 +449,7 @@ header .subtitle::after {
 
 /* 平台选择栏 */
 .platform-select-bar {
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(6, 10, 24, 0.45);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 12px;
@@ -484,7 +484,7 @@ header .subtitle::after {
 .progress-area {
     margin-top: 16px;
     padding: 16px;
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(6, 10, 24, 0.50);
     border: 1px solid var(--border);
     border-radius: var(--radius);
 }
@@ -546,7 +546,7 @@ header .subtitle::after {
 
 /* 用户卡片 */
 .user-card {
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(6, 10, 24, 0.45);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 14px 18px;
@@ -605,7 +605,7 @@ header .subtitle::after {
 .report {
     font-size: 14px; line-height: 1.9;
     white-space: pre-wrap;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(6, 10, 24, 0.45);
     padding: 20px;
     border-radius: var(--radius);
     border: 1px solid var(--border);
@@ -768,7 +768,7 @@ td a:hover { text-shadow: 0 0 6px var(--cyan-glow); }
     flex: 1;
     min-width: 200px;
     padding: 10px 14px;
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(6, 10, 24, 0.50);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text);
@@ -851,7 +851,7 @@ td a:hover { text-shadow: 0 0 6px var(--cyan-glow); }
 .task-detail-json {
     margin-top: 12px;
     padding: 16px;
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(6, 10, 24, 0.55);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     font-family: 'JetBrains Mono', monospace;
@@ -1010,7 +1010,7 @@ td a:hover { text-shadow: 0 0 6px var(--cyan-glow); }
 .modal-field input[type="text"] {
     width: 100%;
     padding: 12px 16px;
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(6, 10, 24, 0.50);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text);
@@ -1074,7 +1074,7 @@ td a:hover { text-shadow: 0 0 6px var(--cyan-glow); }
     justify-content: space-between;
     gap: 8px;
     padding: 12px 16px;
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(6, 10, 24, 0.50);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text);
@@ -1159,7 +1159,7 @@ td a:hover { text-shadow: 0 0 6px var(--cyan-glow); }
 }
 .terminal-id-value {
     padding: 12px 16px;
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(6, 10, 24, 0.50);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--cyan);
@@ -1180,7 +1180,7 @@ td a:hover { text-shadow: 0 0 6px var(--cyan-glow); }
     flex: 1;
     min-width: 200px;
     padding: 12px 16px;
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(6, 10, 24, 0.50);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text);
@@ -1209,3 +1209,75 @@ td a:hover { text-shadow: 0 0 6px var(--cyan-glow); }
     border: 1px solid rgba(57, 255, 20, 0.35);
     background: rgba(57, 255, 20, 0.06);
 }
+
+/* ================================================
+   运行日志页
+   ================================================ */
+.log-lines-select {
+    padding: 6px 12px;
+    background: rgba(6, 10, 24, 0.50);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+.log-lines-select:focus {
+    border-color: var(--cyan-mid);
+}
+.log-lines-select option {
+    background: #0a0e1a;
+    color: var(--text);
+}
+
+.log-info-bar {
+    padding: 8px 14px;
+    margin-bottom: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    background: rgba(6, 10, 24, 0.40);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.log-viewer-wrap {
+    max-height: 65vh;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(6, 10, 24, 0.55);
+    scrollbar-width: thin;
+    scrollbar-color: var(--cyan-dim) transparent;
+}
+.log-viewer-wrap::-webkit-scrollbar {
+    width: 6px;
+}
+.log-viewer-wrap::-webkit-scrollbar-track {
+    background: transparent;
+}
+.log-viewer-wrap::-webkit-scrollbar-thumb {
+    background: var(--cyan-dim);
+    border-radius: 3px;
+}
+
+.log-viewer {
+    margin: 0;
+    padding: 16px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-all;
+    min-height: 200px;
+}
+
+.log-viewer .log-error  { color: var(--danger); }
+.log-viewer .log-success { color: var(--success); }
+.log-viewer .log-warn    { color: var(--warn); }
+.log-viewer .log-info    { color: var(--cyan); }
+.log-viewer .log-sep     { color: var(--text-dim); opacity: 0.5; }

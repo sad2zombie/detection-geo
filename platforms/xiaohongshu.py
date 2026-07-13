@@ -114,35 +114,63 @@ class XiaohongshuPlatform(BasePlatform):
                         return self._err_result(keyword, "https://www.xiaohongshu.com", f"输入关键词失败: {str(type_err)[:80]}")
 
             await asyncio.sleep(random.uniform(0.8, 1.5))
-            current_value = ""
-            try:
-                current_value = await input_locator.input_value()
-            except Exception:
-                pass
-            try:
-                eval_val = await self._page.evaluate(
-                    "() => { const ta = document.querySelector('.textarea-container textarea.textarea'); return ta ? ta.value : null; }"
-                )
-                if eval_val:
-                    current_value = eval_val
-            except Exception:
-                pass
+
+            if set_value_ok:
+                # evaluate 设置成功，直接用 keyword 作为当前值，不再读取验证
+                current_value = keyword
+            else:
+                current_value = ""
+                try:
+                    eval_val = await self._page.evaluate(
+                        "() => { const ta = document.querySelector('.textarea-container textarea.textarea'); return ta ? ta.value : null; }"
+                    )
+                    if eval_val:
+                        current_value = eval_val
+                except Exception:
+                    pass
+                if not current_value:
+                    try:
+                        current_value = await asyncio.wait_for(input_locator.input_value(), timeout=3)
+                    except Exception:
+                        pass
             print(f"    [{self.platform_name}搜索] 输入框当前值: '{current_value}'", flush=True)
             if not current_value:
                 return self._err_result(keyword, "https://www.xiaohongshu.com", "输入框为空")
 
             print(f"    [{self.platform_name}搜索] 按下回车，搜索关键词: {keyword}", flush=True)
 
-            try:
-                await input_locator.click(timeout=3000, force=True)
-            except Exception:
-                pass
-            try:
-                await input_locator.focus(timeout=3000, force=True)
-            except Exception:
-                pass
+            # 优先点击搜索按钮
+            search_clicked = False
+            for sel in ['svg.submit-button', 'svg.btn-wrapper', '[class*="submit-button"]', 'svg.reds-icon']:
+                try:
+                    btn = self._page.locator(sel).first
+                    if await btn.count() > 0 and await btn.is_visible():
+                        # 尝试点击父元素（SVG本身可能不可点击）
+                        parent = btn.locator('xpath=..')
+                        try:
+                            await parent.click(timeout=3000, force=True)
+                        except Exception:
+                            await btn.click(timeout=3000, force=True)
+                        search_clicked = True
+                        print(f"    [{self.platform_name}搜索] 点击搜索按钮成功: {sel}", flush=True)
+                        break
+                except Exception:
+                    continue
 
-            await self._page.keyboard.press("Enter")
+            if not search_clicked:
+                print(f"    [{self.platform_name}搜索] 未找到搜索按钮，尝试按 Enter", flush=True)
+                # 回退：按 Enter 触发搜索
+                try:
+                    await input_locator.click(timeout=3000, force=True)
+                except Exception:
+                    pass
+                try:
+                    await input_locator.focus(timeout=3000, force=True)
+                except Exception:
+                    pass
+                await self._page.keyboard.press("Enter")
+                print(f"    [{self.platform_name}搜索] 按 Enter 触发搜索", flush=True)
+
             await asyncio.sleep(random.uniform(2.5,3.5))
 
             try:

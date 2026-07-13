@@ -43,8 +43,9 @@ async def llm_chat(
         payload["tools"] = tools
         payload["tool_choice"] = tool_choice
 
-    if extra_body:
-        payload.update(extra_body)
+    extra = dict(extra_body) if extra_body else {}
+    extra["enable_search"] = True
+    payload["enable_search"] = extra["enable_search"]
 
     max_retries = 2
     last_error = None

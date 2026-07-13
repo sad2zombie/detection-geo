@@ -686,7 +686,7 @@ _LLM_BRAND_SYSTEM_PROMPT = (
     "要求：\n"
     "1. 不要编造结果，不确定或者没有证据的都需要如实回答\n"
     "2. 返回的域名必须完整（如：www.xxx.com），而且域名中的xxx不可能为中文\n"
-    "3. 只能返回JSON格式：{\"brand_name\": \"...\", \"website\": \"...\", \"description\": \"...\"}"
+    "3. 不能返回空结果，只能返回JSON格式：{\"brand_name\": \"...\", \"website\": \"...\", \"description\": \"...\"}"
 )
 
 
@@ -848,40 +848,15 @@ async def _llm_query_once(brand_name: str, query: str, query_index: int = 0) -> 
         extra_body={"enable_search": True},
     )
 
+    print(f"[Brand][大模型] 完整响应: {response}", flush=True)
+
     content = response.get("content", "").strip()
-
-    # 尝试多种策略提取 JSON
-    data = None
-
-    # 策略1: 直接解析整个内容
-    try:
-        data = json.loads(content)
-    except json.JSONDecodeError:
-        pass
-
-    # 策略2: 从 markdown 代码块中提取
-    if data is None:
-        code_block_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
-        if code_block_match:
-            try:
-                data = json.loads(code_block_match.group(1))
-            except json.JSONDecodeError:
-                pass
-
-    # 策略3: 找到第一个 { 和最后一个 } 之间的内容
-    if data is None:
-        first_brace = content.find('{')
-        last_brace = content.rfind('}')
-        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-            json_str = content[first_brace:last_brace + 1]
-            try:
-                data = json.loads(json_str)
-            except json.JSONDecodeError:
-                pass
-
-    if data is None:
+    json_match = re.search(r'\{[^{}]+\}', content)
+    if not json_match:
         print(f"[Brand][大模型] 返回格式异常 (query={query!r}): {content[:200]}", flush=True)
         return None, False
+
+    data = json.loads(json_match.group())
     website = (data.get("website") or "").strip()
     description = (data.get("description") or "").strip()
     if _is_llm_not_found(website):

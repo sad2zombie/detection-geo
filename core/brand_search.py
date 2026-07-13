@@ -367,8 +367,6 @@ async def _synthesize_brand_answer(
             score += title_match / max(len(bn), 1) * 2.0
         match_in_url = sum(1 for ch in bn if ch in url)
         score += match_in_url / max(len(bn), 1) * 3.0
-        if len(title_clean) <= len(brand_name_clean) + 10:
-            score += 1.0
         depth = url.count("/") - 2 if "://" in url else url.count("/")
         if depth <= 1:
             score += 0.8
@@ -847,8 +845,6 @@ async def _llm_query_once(brand_name: str, query: str, query_index: int = 0) -> 
         temperature=0,
         extra_body={"enable_search": True},
     )
-
-    print(f"[Brand][大模型] 完整响应: {response}", flush=True)
 
     content = response.get("content", "").strip()
     json_match = re.search(r'\{[^{}]+\}', content)

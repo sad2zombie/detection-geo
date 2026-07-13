@@ -734,8 +734,14 @@ def _normalize_llm_website(website: str) -> str:
     return url
 
 
-async def _verify_page_content(website: str, brand_name: str) -> bool:
-    """页面内容验证：访问 URL，检查 title/meta 中是否包含品牌名。"""
+async def _verify_page_content(website: str, brand_name: str) -> bool | None:
+    """页面内容验证：访问 URL，检查 title/meta 中是否包含品牌名。
+
+    Returns:
+        True  - 页面可访问且包含品牌名
+        False - 页面可访问但未匹配品牌名（可疑）
+        None  - 无法访问页面（403/超时/网络错误），结果不确定
+    """
     url = website.strip()
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
@@ -749,6 +755,9 @@ async def _verify_page_content(website: str, brand_name: str) -> bool:
     try:
         async with httpx.AsyncClient(timeout=5, follow_redirects=True) as client:
             resp = await client.get(url, headers=_UA)
+            if resp.status_code == 403 or resp.status_code == 429:
+                print(f"[Brand][验证] 页面被拦截 {resp.status_code}，跳过页面验证: {url}", flush=True)
+                return None  # None 表示"无法判断"，交给交叉验证决定
             if resp.status_code < 200 or resp.status_code >= 400:
                 print(f"[Brand][验证] 页面状态异常 {resp.status_code}: {url}", flush=True)
                 return False
@@ -894,6 +903,7 @@ async def _llm_query_once(brand_name: str, query: str, query_index: int = 0) -> 
         if isinstance(vr, Exception) or vr is False:
             print(f"[Brand][大模型] 验证未通过 (query={query!r}): {website!r}", flush=True)
             return None, False
+        # vr is None 表示页面验证被跳过（403/429），不算失败
 
     website = _normalize_llm_website(website)
     print(f"[Brand][大模型] 命中 (query={query!r}): {website}", flush=True)

@@ -54,16 +54,28 @@ def _write_task(path: Path, data: dict) -> None:
 
 
 def create_task(task_id: str, keyword: str, platform_keys: list[str]) -> dict:
-    """创建任务记录（pending）。进行中任务不可覆盖；已完成/失败任务可覆盖。"""
+    """创建任务记录（pending）。进行中任务可追加新平台；已完成/失败任务可覆盖。"""
     path = _task_path(task_id)
     existing = _read_task(path)
     if existing:
         status = existing.get("status", "")
         if status in _ACTIVE_STATUSES:
-            raise TaskDuplicateError("该任务正在执行中")
+            # 任务正在运行，允许追加新平台，但不允许重复添加已有平台
+            existing_platforms = set(existing.get("platform") or existing.get("platforms") or [])
+            new_platforms = [p for p in platform_keys if p not in existing_platforms]
+            if not new_platforms:
+                raise TaskDuplicateError("该平台已在任务中")
+            # 继续执行，追加新平台
 
     platform_list = platform_keys if isinstance(platform_keys, list) else [platform_keys]
     if existing and existing.get("status") not in _ACTIVE_STATUSES:
+        old_plats = list(existing.get("platform") or existing.get("platforms") or [])
+        for p in platform_list:
+            if p not in old_plats:
+                old_plats.append(p)
+        platform_list = old_plats
+    elif existing and existing.get("status") in _ACTIVE_STATUSES:
+        # 任务正在运行，追加新平台到现有列表
         old_plats = list(existing.get("platform") or existing.get("platforms") or [])
         for p in platform_list:
             if p not in old_plats:

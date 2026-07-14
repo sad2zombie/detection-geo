@@ -447,8 +447,7 @@ async function runDetectInBackground(taskId, keyword, platforms, sendKafka = fal
             if (!result.ok) {
                 const err = result.data?.error || `请求失败 (${result.status})`;
                 showTaskNotice(`任务 ${taskId}（${platform}）失败：${err}`, true);
-                await loadTaskList();
-                return;
+                // 继续执行下一个平台，不退出循环
             }
             await loadTaskList();
         }

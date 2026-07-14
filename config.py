@@ -192,7 +192,7 @@ def get_enabled_platforms() -> dict:
 # ----- 消费任务轮询（HTTP 拉取任务，Kafka 回传结果）-----
 CONSUMPTION_FETCH_URL = os.environ.get("CONSUMPTION_FETCH_URL", "").strip()
 TERMINAL_KEY = os.environ.get("TERMINAL_KEY", "").strip()
-CONSUMPTION_POLL_INTERVAL = max(3, int(os.environ.get("CONSUMPTION_POLL_INTERVAL", "10")))
+CONSUMPTION_POLL_INTERVAL = max(3, int(os.environ.get("CONSUMPTION_POLL_INTERVAL", "8")))
 _CONSUMPTION_POLL_ENV = os.environ.get("CONSUMPTION_POLL_ENABLED", "true").strip().lower()
 CONSUMPTION_POLL_ENABLED = _CONSUMPTION_POLL_ENV in ("1", "true", "yes", "on")
 

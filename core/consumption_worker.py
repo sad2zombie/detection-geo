@@ -12,6 +12,7 @@ from core.consumption_log import add_log
 from core.kafka_producer import build_empty_result, send_result
 
 _poll_lock = asyncio.Lock()
+_poll_platform_index = 0  # 当前轮询到的平台索引
 
 
 def _is_platform_busy(platform_key: str) -> bool:
@@ -162,8 +163,19 @@ async def _run_detect(task: dict) -> dict:
         raise
 
 
+def _get_next_platform_key() -> str | None:
+    """轮询调度：返回下一个待拉取的平台 key。"""
+    global _poll_platform_index
+    keys = list(config.ENABLED_PLATFORM_KEYS)
+    if not keys:
+        return None
+    idx = _poll_platform_index % len(keys)
+    _poll_platform_index = (idx + 1) % len(keys)
+    return keys[idx]
+
+
 async def poll_once() -> dict:
-    """按平台依次向服务器拉取任务：入库 → 检测 → Kafka 回传。"""
+    """每次只拉取一个平台：轮询调度，8 秒一个平台，串行进行。"""
     if not config.CONSUMPTION_FETCH_URL:
         return {"ok": True, "fetched": False, "reason": "未配置 CONSUMPTION_FETCH_URL"}
     if not config.TERMINAL_KEY:
@@ -177,62 +189,63 @@ async def poll_once() -> dict:
         return {"ok": True, "fetched": False, "reason": "已有消费任务处理中，暂不再拉取"}
 
     async with _poll_lock:
-        timeout = httpx.Timeout(30.0, connect=10.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            task = None
-            for platform_key in config.ENABLED_PLATFORM_KEYS:
-                if _is_platform_busy(platform_key):
-                    print(
-                        f"[Consumption] 平台忙碌，跳过拉取 platform={platform_key}",
-                        flush=True,
-                    )
-                    continue
-                print(f"[Consumption] 拉取任务 platform={platform_key}", flush=True)
-                task = await _fetch_task(client, platform_key)
-                if task:
-                    break
+        platform_key = _get_next_platform_key()
+        if not platform_key:
+            return {"ok": True, "fetched": False, "reason": "无可用平台"}
 
-            if not task:
-                return {"ok": True, "fetched": False, "reason": "暂无新任务"}
-
-            task_id = str(task["task_id"]).strip()
-            keyword = task["keyword"]
-            platform_key = task["platform"]
+        if _is_platform_busy(platform_key):
             print(
-                f"[Consumption] 收到任务 task_id={task_id} keyword={keyword} platform={platform_key}",
+                f"[Consumption] 平台忙碌，跳过拉取 platform={platform_key}",
                 flush=True,
             )
-            add_log(task_id, "入库")
+            return {"ok": True, "fetched": False, "reason": f"平台 {platform_key} 忙碌"}
 
+        print(f"[Consumption] 拉取任务 platform={platform_key}", flush=True)
+        timeout = httpx.Timeout(30.0, connect=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            task = await _fetch_task(client, platform_key)
+
+        if not task:
+            return {"ok": True, "fetched": False, "reason": "暂无新任务"}
+
+        task_id = str(task["task_id"]).strip()
+        keyword = task["keyword"]
+        platform_key = task["platform"]
+        print(
+            f"[Consumption] 收到任务 task_id={task_id} keyword={keyword} platform={platform_key}",
+            flush=True,
+        )
+        add_log(task_id, "入库")
+
+        try:
+            await _wait_for_detect_idle()
+            result = await _run_detect(task)
+            await _publish_to_kafka(result)
+            outcome = "成功" if result.get("status") == "succeed" else "失败"
+            add_log(task_id, outcome)
+            return {
+                "ok": True,
+                "fetched": True,
+                "task_id": task_id,
+                "platform": platform_key,
+                "outcome": outcome,
+            }
+        except Exception as e:
+            err_msg = str(e)
+            failed_result = build_empty_result(
+                keyword, platform_key, task_id=task_id, error=err_msg
+            )
             try:
-                await _wait_for_detect_idle()
-                result = await _run_detect(task)
-                await _publish_to_kafka(result)
-                outcome = "成功" if result.get("status") == "succeed" else "失败"
-                add_log(task_id, outcome)
-                return {
-                    "ok": True,
-                    "fetched": True,
-                    "task_id": task_id,
-                    "platform": platform_key,
-                    "outcome": outcome,
-                }
-            except Exception as e:
-                err_msg = str(e)
-                failed_result = build_empty_result(
-                    keyword, platform_key, task_id=task_id, error=err_msg
-                )
-                try:
-                    await _publish_to_kafka(failed_result)
-                except Exception as kafka_err:
-                    err_msg = f"{err_msg}; Kafka回传失败: {kafka_err}"
-                add_log(task_id, "失败")
-                return {
-                    "ok": True,
-                    "fetched": True,
-                    "task_id": task_id,
-                    "platform": platform_key,
-                    "outcome": "失败",
-                    "error": err_msg,
-                }
+                await _publish_to_kafka(failed_result)
+            except Exception as kafka_err:
+                err_msg = f"{err_msg}; Kafka回传失败: {kafka_err}"
+            add_log(task_id, "失败")
+            return {
+                "ok": True,
+                "fetched": True,
+                "task_id": task_id,
+                "platform": platform_key,
+                "outcome": "失败",
+                "error": err_msg,
+            }
 

@@ -10,7 +10,7 @@
 
     <title>任务管理 // GEO TASK MANAGEMENT</title>
 
-    <link rel="stylesheet" href="/static/style.css?v=10">
+    <link rel="stylesheet" href="/static/style.css?v=12">
 
 </head>
 
@@ -252,8 +252,25 @@
         </div>
     </div>
 
+    <!-- 重试确认弹窗 -->
+    <div class="modal-overlay" id="retry-task-modal" style="display:none;" aria-hidden="true">
+        <div class="modal-card modal-card-sm" role="dialog" aria-labelledby="retry-modal-title">
+            <div class="modal-header">
+                <h3 id="retry-modal-title">确认重试</h3>
+                <button type="button" class="modal-close" id="btn-close-retry-modal" aria-label="关闭">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-confirm-text" id="retry-confirm-text">确定要重试该任务吗？</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" id="btn-cancel-retry">取消</button>
+                <button type="button" class="btn btn-primary" id="btn-confirm-retry">重试</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/analysis-render.js?v=5"></script>
-    <script src="/static/tasks.js?v=14"></script>
+    <script src="/static/tasks.js?v=16"></script>
 
 </body>
 

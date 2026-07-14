@@ -926,9 +926,9 @@ td a:hover { text-shadow: 0 0 6px var(--cyan-glow); }
     inset: 0;
     z-index: 1000;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    padding: 48px 24px 24px;
+    padding: 24px;
     overflow-y: auto;
     background: rgba(0, 0, 0, 0.65);
     backdrop-filter: blur(4px);

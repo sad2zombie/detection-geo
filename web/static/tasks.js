@@ -45,6 +45,7 @@ let platformMap = {};
 
 let dropdownOpen = false;
 let pendingDeleteTaskId = "";
+let pendingRetryTaskId = "";
 let currentViewTaskId = "";
 
 
@@ -428,6 +429,80 @@ function showTaskNotice(msg, isError) {
     section.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
+function openRetryModal(taskId, keyword) {
+    pendingRetryTaskId = taskId || "";
+    const modal = document.getElementById("retry-task-modal");
+    const textEl = document.getElementById("retry-confirm-text");
+    if (!modal || !pendingRetryTaskId) return;
+
+    const label = keyword ? `「${keyword}」` : pendingRetryTaskId;
+    if (textEl) {
+        textEl.textContent = `确定要重试任务 ${pendingRetryTaskId}（${label}）吗？将删除旧记录并重新执行检测。`;
+    }
+
+    modal.style.display = "flex";
+    modal.setAttribute("aria-hidden", "false");
+}
+
+function closeRetryModal() {
+    const modal = document.getElementById("retry-task-modal");
+    if (!modal) return;
+    modal.style.display = "none";
+    modal.setAttribute("aria-hidden", "true");
+    pendingRetryTaskId = "";
+}
+
+async function confirmRetryTask() {
+    if (!pendingRetryTaskId) return;
+    const taskId = pendingRetryTaskId;
+    const btn = document.getElementById("btn-confirm-retry");
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "重试中…";
+    }
+    closeRetryModal();
+    await retryTask(taskId);
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = "重试";
+    }
+}
+
+async function retryTask(taskId) {
+    if (!taskId) return;
+
+    try {
+        // 1. 先获取任务详情（关键词、平台列表）
+        const result = await api(`/api/tasks/${encodeURIComponent(taskId)}`);
+        if (!result.ok || !result.data) {
+            showTaskNotice(`获取任务 ${taskId} 详情失败`, true);
+            return;
+        }
+
+        const task = result.data;
+        const keyword = task.keyword || "";
+        const platforms = task.platform || task.platforms || [];
+
+        if (!keyword || !platforms.length) {
+            showTaskNotice(`任务 ${taskId} 缺少关键词或平台信息，无法重试`, true);
+            return;
+        }
+
+        // 2. 删除旧任务（failed 状态允许删除），避免旧 result 干扰
+        const delResult = await api(`/api/tasks/${encodeURIComponent(taskId)}`, { method: "DELETE" });
+        if (!delResult.ok) {
+            showTaskNotice(`删除旧任务失败：${delResult.data?.error || "未知错误"}`, true);
+            return;
+        }
+
+        // 3. 重新执行检测（会用相同 task_id 创建全新任务）
+        showTaskNotice(`正在重试任务 ${taskId}（${keyword}）…`, false);
+        await runDetectInBackground(taskId, keyword, platforms);
+    } catch (e) {
+        showTaskNotice(`重试任务 ${taskId} 失败：${e.message || "网络错误"}`, true);
+    }
+}
+
 async function runDetectInBackground(taskId, keyword, platforms, sendKafka = false) {
     setTimeout(() => loadTaskList(), 300);
 
@@ -519,9 +594,13 @@ async function loadTaskList() {
 
         tbody.innerHTML = list.map((t) => {
             const canDelete = t.status !== "pending" && t.status !== "running";
+            const canRetry = t.status === "failed";
             const deleteCell = canDelete
                 ? `<button type="button" class="btn btn-sm btn-danger btn-task-delete" data-task-id="${escapeHtml(t.task_id)}" data-keyword="${escapeHtml(t.keyword || "")}">删除</button>`
                 : `<span class="task-action-disabled" title="进行中的任务不可删除">—</span>`;
+            const retryCell = canRetry
+                ? `<button type="button" class="btn btn-sm btn-primary btn-task-retry" data-task-id="${escapeHtml(t.task_id)}">重试</button>`
+                : `<span class="task-action-disabled">—</span>`;
             return `
             <tr class="task-row" data-task-id="${escapeHtml(t.task_id)}">
                 <td class="task-id-cell">${escapeHtml(t.task_id)}</td>
@@ -529,7 +608,7 @@ async function loadTaskList() {
                 <td><span class="task-status ${statusClass(t.status)}">${escapeHtml(statusLabel(t.status))}</span></td>
                 <td>${escapeHtml(t.created_at || "-")}</td>
                 <td><button type="button" class="btn btn-sm btn-outline btn-task-view" data-task-id="${escapeHtml(t.task_id)}">查看</button></td>
-                <td>${deleteCell}</td>
+                <td>${retryCell} ${deleteCell}</td>
             </tr>`;
         }).join("");
 
@@ -544,6 +623,13 @@ async function loadTaskList() {
             btn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 openDeleteModal(btn.dataset.taskId, btn.dataset.keyword);
+            });
+        });
+
+        document.querySelectorAll(".btn-task-retry").forEach((btn) => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                openRetryModal(btn.dataset.taskId, btn.closest("tr")?.querySelector("td:nth-child(2)")?.textContent || "");
             });
         });
     } catch (e) {
@@ -815,6 +901,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.target.id === "delete-task-modal") closeDeleteModal();
     });
 
+    document.getElementById("btn-close-retry-modal").addEventListener("click", closeRetryModal);
+    document.getElementById("btn-cancel-retry").addEventListener("click", closeRetryModal);
+    document.getElementById("btn-confirm-retry").addEventListener("click", confirmRetryTask);
+    document.getElementById("retry-task-modal").addEventListener("click", (e) => {
+        if (e.target.id === "retry-task-modal") closeRetryModal();
+    });
+
     document.getElementById("platform-dropdown-trigger").addEventListener("click", (e) => {
 
         e.stopPropagation();
@@ -860,9 +953,12 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
             const deleteModal = document.getElementById("delete-task-modal");
+            const retryModal = document.getElementById("retry-task-modal");
             const searchModal = document.getElementById("search-task-modal");
             if (deleteModal && deleteModal.style.display !== "none") {
                 closeDeleteModal();
+            } else if (retryModal && retryModal.style.display !== "none") {
+                closeRetryModal();
             } else if (searchModal && searchModal.style.display !== "none") {
                 closeSearchModal();
             } else if (dropdownOpen) {

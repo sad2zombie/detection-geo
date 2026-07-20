@@ -41,7 +41,7 @@
 
 - [x] Wave 2: `detect_guard.py` + thin re-export from `search_engine`（compat imports 保留）
 - [x] Wave 3: split `brand_search` / `web_search`
-- Wave 4: task field cleanup, empty packages, README
+- [x] Wave 4: task field cleanup, empty packages, README
 
 ### Wave 3 notes
 
@@ -50,3 +50,9 @@
 - `core/brand_llm.py`：大模型查询
 - `core/brand_search.py`：流水线入口 + 缓存；对外 API 不变（`search_brand` / `get_cached_brand_result` / `SOURCE_LLM`）
 - 模块注释与实现对齐：大模型优先，再搜索平台
+
+### Wave 4 notes
+
+- `task_manager`：统一写入 `platform` 列表；读时兼容历史 `platforms`；`get_task` / `_write_task` 规范化
+- 删除空包 `ai/`、`utils/`
+- 新增根目录 `README.md`

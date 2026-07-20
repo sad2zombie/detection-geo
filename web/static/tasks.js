@@ -481,7 +481,7 @@ async function retryTask(taskId) {
 
         const task = result.data;
         const keyword = task.keyword || "";
-        const platforms = task.platform || task.platforms || [];
+        const platforms = Array.isArray(task.platform) ? task.platform : [];
 
         if (!keyword || !platforms.length) {
             showTaskNotice(`任务 ${taskId} 缺少关键词或平台信息，无法重试`, true);

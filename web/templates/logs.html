@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>运行日志 // GEO RUNTIME LOGS</title>
+    <link rel="stylesheet" href="/static/style.css?v=12">
+</head>
+<body>
+    <script src="/static/bg-theme.js?v=1"></script>
+    <div class="bg-layer bg-gradient"></div>
+    <div class="bg-layer bg-grid"></div>
+    <div class="bg-layer bg-scanlines"></div>
+    <div class="top-bar"></div>
+    <div class="corner-deco tl"></div>
+    <div class="corner-deco tr"></div>
+    <div class="corner-deco bl"></div>
+    <div class="corner-deco br"></div>
+
+    <div class="container">
+        <header>
+            <div class="logo-line">
+                <div class="logo-icon">&#128220;</div>
+                <h1>运行日志</h1>
+            </div>
+            <p class="subtitle">GEO SYSTEM RUNTIME LOG VIEWER</p>
+            <nav class="top-nav">
+                <a href="/">品牌检测</a>
+                <a href="/tasks">任务管理</a>
+                <a href="/consumption">消费日志</a>
+                <a href="/terminal">终端信息</a>
+                <a href="/logs" class="active">运行日志</a>
+            </nav>
+        </header>
+
+        <section class="card">
+            <div class="card-corner tl"></div>
+            <div class="card-corner tr"></div>
+            <div class="card-corner bl"></div>
+            <div class="card-corner br"></div>
+            <div class="task-list-header">
+                <h2>&#9654; 系统日志</h2>
+                <div class="task-list-actions">
+                    <select id="log-lines-select" class="log-lines-select">
+                        <option value="100">100 行</option>
+                        <option value="300">300 行</option>
+                        <option value="500" selected>500 行</option>
+                        <option value="1000">1000 行</option>
+                        <option value="2000">2000 行</option>
+                    </select>
+                    <button type="button" class="btn btn-outline btn-sm" id="btn-refresh-logs">刷新</button>
+                    <button type="button" class="btn btn-outline btn-sm" id="btn-auto-scroll">自动滚动: 开</button>
+                </div>
+            </div>
+            <div class="log-info-bar" id="log-info-bar">
+                <span id="log-info-text">加载中…</span>
+            </div>
+            <div class="log-viewer-wrap">
+                <pre class="log-viewer" id="log-viewer"><span class="loading"><span class="spinner"></span>正在加载日志…</span></pre>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/logs.js?v=1"></script>
+</body>
+</html>

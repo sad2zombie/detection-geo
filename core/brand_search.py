@@ -8,7 +8,6 @@
 4. 大模型兜底（需 LLM_API_KEY）
 """
 
-import asyncio
 import json
 import re
 import httpx
@@ -732,14 +731,8 @@ def _normalize_llm_website(website: str) -> str:
     return url
 
 
-async def _verify_page_content(website: str, brand_name: str) -> bool | None:
-    """页面内容验证：访问 URL，检查 title/meta 中是否包含品牌名。
-
-    Returns:
-        True  - 页面可访问且包含品牌名
-        False - 页面可访问但未匹配品牌名（可疑）
-        None  - 无法访问页面（403/超时/网络错误），结果不确定
-    """
+async def _verify_page_reachable(website: str) -> bool:
+    """URL 可达性验证：访问 URL，能拿到响应就算通过。"""
     url = website.strip()
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
@@ -753,41 +746,14 @@ async def _verify_page_content(website: str, brand_name: str) -> bool | None:
     try:
         async with httpx.AsyncClient(timeout=5, follow_redirects=True) as client:
             resp = await client.get(url, headers=_UA)
-            if resp.status_code == 403 or resp.status_code == 429:
-                print(f"[Brand][验证] 页面被拦截 {resp.status_code}，跳过页面验证: {url}", flush=True)
-                return None  # None 表示"无法判断"，交给交叉验证决定
-            if resp.status_code < 200 or resp.status_code >= 400:
-                print(f"[Brand][验证] 页面状态异常 {resp.status_code}: {url}", flush=True)
-                return False
-
-            # 只取前 2KB，title/meta 都在头部
-            html = resp.text[:2048]
-
-        # 提取 title
-        title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
-        title = title_match.group(1).strip() if title_match else ""
-
-        # 提取 meta description
-        desc_match = re.search(
-            r'<meta[^>]+(?:name=["\']description["\']|property=["\']og:description["\'])[^>]+content=["\']([^"\']*)["\']',
-            html, re.IGNORECASE,
-        )
-        if not desc_match:
-            desc_match = re.search(
-                r'<meta[^>]+content=["\']([^"\']*)["\'][^>]+(?:name=["\']description["\']|property=["\']og:description["\'])',
-                html, re.IGNORECASE,
-            )
-        description = desc_match.group(1).strip() if desc_match else ""
-
-        check_text = f"{title} {description}".lower()
-        brand_lower = brand_name.lower()
-
-        if brand_lower in check_text:
-            print(f"[Brand][验证] 页面内容通过: {url} (title={title!r})", flush=True)
-            return True
-
-        print(f"[Brand][验证] 页面内容未匹配品牌名: {url} (title={title!r})", flush=True)
-        return False
+            if resp.status_code < 400:
+                print(f"[Brand][验证] URL可达: {url} (status={resp.status_code})", flush=True)
+                return True
+            if resp.status_code in (403, 429):
+                print(f"[Brand][验证] URL被拦截但存在: {url} (status={resp.status_code})", flush=True)
+                return True
+            print(f"[Brand][验证] URL不可达: {url} (status={resp.status_code})", flush=True)
+            return False
 
     except httpx.TimeoutException:
         print(f"[Brand][验证] 页面超时: {url}", flush=True)
@@ -797,41 +763,8 @@ async def _verify_page_content(website: str, brand_name: str) -> bool | None:
         return False
 
 
-async def _verify_search_cross_reference(website: str, brand_name: str) -> bool:
-    """搜索引擎交叉验证：百度搜索品牌名，检查结果中是否包含该域名。"""
-    url = website.strip()
-    if not url.startswith(("http://", "https://")):
-        url = "https://" + url
-    target_host = (urlparse(url).hostname or "").lower()
-
-    try:
-        results = await web_search(brand_name, max_results=10, force_engine="baidu")
-        for r in results:
-            result_url = r.get("url", "")
-            result_host = (urlparse(result_url).hostname or "").lower()
-            if result_host and target_host and (
-                result_host == target_host
-                or result_host.endswith("." + target_host)
-                or target_host.endswith("." + result_host)
-            ):
-                print(f"[Brand][验证] 交叉验证通过: {target_host} 出现在百度结果中", flush=True)
-                return True
-
-        print(f"[Brand][验证] 交叉验证未匹配: {target_host} 未出现在百度前10条结果中", flush=True)
-        return False
-
-    except Exception as e:
-        print(f"[Brand][验证] 交叉验证异常: {e}", flush=True)
-        return False
-
-
-async def _llm_query_once(brand_name: str, query: str, query_index: int = 0) -> tuple[dict | None, bool]:
+async def _llm_query_once(brand_name: str, query: str) -> tuple[dict | None, bool]:
     """单次大模型品牌官网查询。
-
-    Args:
-        brand_name: 品牌名
-        query: 查询语句
-        query_index: 问法序号，0 表示第一问法（会做交叉验证）
 
     Returns:
         (result, stop): stop=True 表示模型明确未找到，无需再换问法查询。
@@ -841,7 +774,7 @@ async def _llm_query_once(brand_name: str, query: str, query_index: int = 0) -> 
             {"role": "system", "content": _LLM_BRAND_SYSTEM_PROMPT},
             {"role": "user", "content": query},
         ],
-        max_tokens=500,
+        max_tokens=2000,
         temperature=0,
         extra_body={"enable_search": True},
     )
@@ -863,18 +796,11 @@ async def _llm_query_once(brand_name: str, query: str, query_index: int = 0) -> 
         print(f"[Brand][大模型] 无效官网已丢弃 (query={query!r}): {website!r}", flush=True)
         return None, False
 
-    # 并行验证：页面内容验证 + 搜索引擎交叉验证（仅第一问法）
-    tasks = [_verify_page_content(website, brand_name)]
-    if query_index == 0:
-        tasks.append(_verify_search_cross_reference(website, brand_name))
-
-    verify_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    for vr in verify_results:
-        if isinstance(vr, Exception) or vr is False:
-            print(f"[Brand][大模型] 验证未通过 (query={query!r}): {website!r}", flush=True)
-            return None, False
-        # vr is None 表示页面验证被跳过（403/429），不算失败
+    # URL 可达性验证：能访问就算通过
+    reachable = await _verify_page_reachable(website)
+    if not reachable:
+        print(f"[Brand][大模型] 验证未通过 (query={query!r}): {website!r}", flush=True)
+        return None, False
 
     website = _normalize_llm_website(website)
     print(f"[Brand][大模型] 命中 (query={query!r}): {website}", flush=True)
@@ -895,9 +821,9 @@ async def _llm_fallback(brand_name: str) -> dict | None:
         brand_name,
     ]
     try:
-        for i, query in enumerate(queries):
+        for query in queries:
             print(f"[Brand][大模型] 查询: {query}", flush=True)
-            result, stop = await _llm_query_once(brand_name, query, query_index=i)
+            result, stop = await _llm_query_once(brand_name, query)
             if result:
                 return result
             if stop:

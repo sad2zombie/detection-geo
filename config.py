@@ -140,6 +140,8 @@ BOCHA_API_KEY = os.environ.get("BOCHA_API_KEY", "")
 
 # 品牌查询开关（设为 False 可跳过一级信源检测）
 BRAND_SEARCH_ENABLED = os.environ.get("BRAND_SEARCH_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")
+# 官网规则评分明细日志（默认关闭，设 true 时打印每条结果得分）
+BRAND_SCORE_DEBUG = os.environ.get("BRAND_SCORE_DEBUG", "").strip().lower() in ("1", "true", "yes", "on")
 
 # ----- 启用平台顺序（对外 detect / Kafka 结果固定顺序）-----
 PLATFORM_ORDER = (

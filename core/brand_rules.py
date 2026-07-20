@@ -8,6 +8,7 @@ import httpx
 from urllib.parse import urlparse, urlunparse
 
 import config
+from core.web_engines.common import _is_error_result as _is_error_results
 
 # UGC / 内容平台，不可作为品牌官网
 _UGC_HOST_MARKERS = (
@@ -342,11 +343,12 @@ async def _synthesize_brand_answer(
             and _is_official_website_candidate(r["url"])
         )
 
-    # 调试：打印每条结果的得分
-    print(f"[Brand][调试] 共 {len(parsed_results)} 条结果进入评分:", flush=True)
-    for r in parsed_results:
-        score = _brand_relevance(r)
-        print(f"[Brand][调试]   标题: {r['title'][:60]}  URL: {r['url'][:40]}  得分: {score:.1f}", flush=True)
+    # 调试：打印每条结果的得分（默认关闭，BRAND_SCORE_DEBUG=true 开启）
+    if config.BRAND_SCORE_DEBUG:
+        print(f"[Brand][调试] 共 {len(parsed_results)} 条结果进入评分:", flush=True)
+        for r in parsed_results:
+            score = _brand_relevance(r)
+            print(f"[Brand][调试]   标题: {r['title'][:60]}  URL: {r['url'][:40]}  得分: {score:.1f}", flush=True)
 
     # ── 找官网 URL ──
     website = "未找到"
@@ -595,15 +597,3 @@ def _resolve_search_source(
         if engine and engine not in ("未知", "无可用引擎"):
             return engine
     return ""
-
-
-def _is_error_results(results: list[dict]) -> bool:
-    """检查结果是否为错误消息。"""
-    if not results:
-        return True
-    first = results[0]
-    title = first.get("title", "")
-    snippet = first.get("snippet", "")
-    error_keywords = ("搜索错误", "搜索失败", "ratelimit", "rate limit", "配置错误", "百度被拦截", "未找到结果")
-    combined = (title + snippet).lower()
-    return any(kw.lower() in combined for kw in error_keywords)

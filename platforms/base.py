@@ -300,7 +300,8 @@ class BasePlatform(ABC):
                     pass
                 self._ctx = None
                 self._page = None
-                await self._ensure_browser(headless=False)
+                # 沿用当前 headless 模式，避免自动化检测重试时突然弹窗
+                await self._ensure_browser(headless=None)
             else:
                 print("重试耗尽，返回空结果", flush=True)
         return {

@@ -44,7 +44,7 @@ async def llm_chat(
         payload["tool_choice"] = tool_choice
 
     extra = dict(extra_body) if extra_body else {}
-    extra["enable_search"] = True
+    extra.setdefault("enable_search", True)  # 尊重调用方显式传入的值
     payload["enable_search"] = extra["enable_search"]
 
     max_retries = 2

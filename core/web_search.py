@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import time
 
 import config
 from core.web_engines import baidu as _baidu
@@ -50,9 +49,9 @@ async def web_search(query: str, max_results: int = 5, force_engine: str = "") -
                 return _tag_engine(results, "博查")
         return _tag_engine([], force_engine)
 
-    baidu_in_cooldown = time.time() < _baidu._baidu_blocked_until
+    baidu_in_cooldown = _baidu.is_in_cooldown()
     if baidu_in_cooldown:
-        remain = int(_baidu._baidu_blocked_until - time.time())
+        remain = _baidu.cooldown_remaining_seconds()
         print(f"[Search] 百度冷却中，跳过百度（剩余{remain}s）", flush=True)
 
     # ── 1. 百度搜索（优先，被风控时重试 1 次） ──
@@ -79,8 +78,7 @@ async def web_search(query: str, max_results: int = 5, force_engine: str = "") -
         if results and not _is_error_result(results):
             print("[Search] 百度浏览器版结果不相关，继续降级", flush=True)
 
-        _baidu._baidu_blocked_until = time.time() + _baidu.BAIDU_COOLDOWN_SECONDS
-        await _baidu._reset_baidu_client()
+        await _baidu.enter_cooldown()
         print(f"[Search] 百度连续被拦截，进入冷却期 {_baidu.BAIDU_COOLDOWN_SECONDS}s", flush=True)
 
     # ── 2. Bing HTML 搜索（百度不可用时降级，无需 API Key） ──

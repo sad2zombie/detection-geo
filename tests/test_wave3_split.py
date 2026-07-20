@@ -43,6 +43,9 @@ def test_official_candidate_filters():
 
 
 def test_is_error_results_alias():
+    from core.web_engines.common import _is_error_result
+
+    assert _is_error_results is _is_error_result
     assert _is_error_results([]) is True
     assert _is_error_results([{"title": "ok", "snippet": "ok"}]) is False
 

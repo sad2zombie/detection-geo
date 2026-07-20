@@ -71,6 +71,24 @@ async def _reset_baidu_client() -> None:
     print("[Baidu] 客户端已重置（cookie 清除）", flush=True)
 
 
+def is_in_cooldown() -> bool:
+    """百度是否处于风控冷却期。"""
+    return time.time() < _baidu_blocked_until
+
+
+def cooldown_remaining_seconds() -> int:
+    """冷却剩余秒数；未在冷却中时为 0。"""
+    remain = int(_baidu_blocked_until - time.time())
+    return remain if remain > 0 else 0
+
+
+async def enter_cooldown() -> None:
+    """进入风控冷却并重置客户端。"""
+    global _baidu_blocked_until
+    _baidu_blocked_until = time.time() + BAIDU_COOLDOWN_SECONDS
+    await _reset_baidu_client()
+
+
 async def _baidu_throttle() -> None:
     """请求节流：确保两次百度请求之间至少间隔 BAIDU_MIN_INTERVAL 秒。"""
     global _last_baidu_request_time
@@ -175,56 +193,6 @@ def _attach_snippets_by_position(html: str, results: list[dict]) -> None:
                 break
     for r in results:
         r.pop("_pos", None)
-
-
-async def _search_bing_browser(query: str, max_results: int = 5) -> list[dict]:
-    """Bing 搜索（CloakBrowser 真实浏览器版本）。
-    HTTP 版返回不相关结果时降级到此版本。
-    """
-    import re
-    from html import unescape
-
-    print(f"[Bing-Browser] 搜索: {query}", flush=True)
-    try:
-        from core.browser_manager import get_browser_manager
-        from config import COOKIE_DIR
-        bing_profile = str(COOKIE_DIR / "bing_profile")
-
-        bm = get_browser_manager()
-        async with bm.acquire_page(bing_profile, headless=True) as page_ctx:
-            page = page_ctx.page
-            await page.goto(
-                f"https://cn.bing.com/search?q={query}&count={max_results * 2}&setlang=zh-CN",
-                wait_until="domcontentloaded",
-                timeout=20000,
-            )
-            await page.wait_for_timeout(2000)
-
-            # 提取搜索结果
-            results = await page.evaluate("""(maxResults) => {
-                const items = document.querySelectorAll('li.b_algo');
-                const out = [];
-                for (const li of items) {
-                    const h2 = li.querySelector('h2 a');
-                    if (!h2) continue;
-                    const href = h2.getAttribute('href') || '';
-                    const title = h2.innerText.trim();
-                    const snipEl = li.querySelector('p.b_lineclamp2, p.b_lineclamp3, .b_caption p');
-                    const snippet = snipEl ? snipEl.innerText.trim() : '';
-                    if (href && title) {
-                        out.push({ title, url: href, snippet });
-                    }
-                    if (out.length >= maxResults) break;
-                }
-                return out;
-            }""", max_results)
-
-            print(f"[Bing-Browser] 提取到 {len(results)} 条结果", flush=True)
-            return results if results else [{"title": "Bing搜索", "url": "", "snippet": "未找到结果"}]
-
-    except Exception as e:
-        print(f"[Bing-Browser] 异常: {type(e).__name__}: {e}", flush=True)
-        return [{"title": "Bing搜索错误", "url": "", "snippet": str(e)}]
 
 
 async def _search_baidu_browser(query: str, max_results: int = 5) -> list[dict]:

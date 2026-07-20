@@ -3,6 +3,7 @@
 
 import asyncio
 import json
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from fastapi.templating import Jinja2Templates
 import config
 from core.auth_manager import AuthManager
 
+logger = logging.getLogger(__name__)
+
 
 async def _consumption_poll_loop():
     """后台定时向服务器拉取消费任务。"""
@@ -23,15 +26,12 @@ async def _consumption_poll_loop():
         return
     from core.consumption_worker import poll_once
 
-    print(
-        f"[消费轮询] 已启动，间隔 {config.CONSUMPTION_POLL_INTERVAL}s",
-        flush=True,
-    )
+    logger.info(f"[消费轮询] 已启动，间隔 {config.CONSUMPTION_POLL_INTERVAL}s")
     while True:
         try:
             await poll_once()
         except Exception as e:
-            print(f"[消费轮询] 异常: {e}", flush=True)
+            logger.error(f"[消费轮询] 异常: {e}")
         await asyncio.sleep(config.CONSUMPTION_POLL_INTERVAL)
 
 
@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     """服务启动后，**后台异步**对所有启用平台跑一次 check_status。"""
     enabled = [k for k, v in config.PLATFORMS.items() if v.get("enabled")]
     if enabled:
-        print(f"[启动] 自动检测 {len(enabled)} 个平台登录状态…", flush=True)
+        logger.info(f"[启动] 自动检测 {len(enabled)} 个平台登录状态…")
         asyncio.create_task(_initial_auth_check(enabled))
     asyncio.create_task(_consumption_poll_loop())
     yield
@@ -55,7 +55,7 @@ async def _initial_auth_check(platforms):
         try:
             await auth_manager.check_status(key)
         except Exception as e:
-            print(f"[启动] {key} 检测失败（已忽略）: {e}", flush=True)
+            logger.warning(f"[启动] {key} 检测失败（已忽略）: {e}")
 
 
 app = FastAPI(title="品牌检测系统", version="0.1.0", lifespan=lifespan)
@@ -227,7 +227,7 @@ async def api_detect(request: Request, body: dict):
                 from core.kafka_producer import send_result
                 await send_result(result)
             except Exception as kafka_err:
-                print(f"[Kafka] 任务 {task_id} 回传失败（已忽略）: {kafka_err}", flush=True)
+                logger.warning(f"[Kafka] 任务 {task_id} 回传失败（已忽略）: {kafka_err}")
         return JSONResponse(result)
     except DetectBusyError:
         fail_task(task_id, "检测任务进行中，请稍后再试")

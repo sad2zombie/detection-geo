@@ -2,11 +2,14 @@
 """京东平台搜索模块（仅 _do_search 核心逻辑）"""
 
 import asyncio
+import logging
 from urllib.parse import quote
 
 from config import JD_PROFILE
 from platforms.base import BasePlatform, SearchResult
 from platforms import register_platform
+
+logger = logging.getLogger(__name__)
 
 
 MAX_SHOPS = 10
@@ -24,14 +27,14 @@ class JdPlatform(BasePlatform):
         await self._ensure_browser(headless=False)
         search_url = f"https://search.jd.com/Search?enc=utf-8&keyword={quote(keyword)}&shop=1"
 
-        print(f"    [{self.platform_name}搜索] 正在搜索: {keyword}", flush=True)
+        logger.debug(f"    [{self.platform_name}搜索] 正在搜索: {keyword}")
 
         try:
             if not await self._goto_with_retry(search_url):
                 return self._err_result(keyword, search_url, "导航京东搜索页失败")
 
             await asyncio.sleep(4)
-            print(f"    [{self.platform_name}搜索] 页面加载完成，等待渲染", flush=True)
+            logger.debug(f"    [{self.platform_name}搜索] 页面加载完成，等待渲染")
 
             # 点击「店铺」tab
             try:
@@ -39,9 +42,9 @@ class JdPlatform(BasePlatform):
                 if await shop_tab.count() > 0:
                     await shop_tab.click()
                     await asyncio.sleep(3)
-                    print(f"    [{self.platform_name}搜索] 已点击「店铺」tab，等待列表渲染", flush=True)
+                    logger.debug(f"    [{self.platform_name}搜索] 已点击「店铺」tab，等待列表渲染")
             except Exception as tab_err:
-                print(f"    [{self.platform_name}搜索] 点击「店铺」tab 失败（忽略）: {tab_err}", flush=True)
+                logger.warning(f"    [{self.platform_name}搜索] 点击「店铺」tab 失败（忽略）: {tab_err}")
 
             extract_dom = """() => {
                 const results = [];
@@ -122,19 +125,19 @@ class JdPlatform(BasePlatform):
                     try:
                         next_btn = self._page.locator('[class*="_pagination_next_"]').first
                         if await next_btn.count() == 0:
-                            print(f"    [{self.platform_name}搜索] 未找到「下一页」按钮，停止翻页", flush=True)
+                            logger.debug(f"    [{self.platform_name}搜索] 未找到「下一页」按钮，停止翻页")
                             break
 
                         btn_class = await next_btn.get_attribute('class') or ''
                         if 'true' in btn_class.split() or btn_class.endswith(' true'):
-                            print(f"    [{self.platform_name}搜索] 「下一页」按钮已禁用，停止翻页", flush=True)
+                            logger.debug(f"    [{self.platform_name}搜索] 「下一页」按钮已禁用，停止翻页")
                             break
 
                         await next_btn.click()
                         await asyncio.sleep(3)
-                        print(f"    [{self.platform_name}搜索] 已点击「下一页」，当前第 {page_no} 页", flush=True)
+                        logger.debug(f"    [{self.platform_name}搜索] 已点击「下一页」，当前第 {page_no} 页")
                     except Exception as nav_err:
-                        print(f"    [{self.platform_name}搜索] 翻页异常: {nav_err}", flush=True)
+                        logger.warning(f"    [{self.platform_name}搜索] 翻页异常: {nav_err}")
                         break
                 else:
                     await asyncio.sleep(2)
@@ -142,19 +145,19 @@ class JdPlatform(BasePlatform):
                 try:
                     page_shops = await self._page.evaluate(extract_dom)
                 except Exception as extract_err:
-                    print(f"    [{self.platform_name}搜索] 第 {page_no} 页提取 DOM 失败: {extract_err}", flush=True)
+                    logger.warning(f"    [{self.platform_name}搜索] 第 {page_no} 页提取 DOM 失败: {extract_err}")
                     break
 
-                print(f"    [{self.platform_name}搜索] 第 {page_no} 页提取到 {len(page_shops)} 个店铺", flush=True)
+                logger.debug(f"    [{self.platform_name}搜索] 第 {page_no} 页提取到 {len(page_shops)} 个店铺")
 
                 current_sig = "|".join(sorted(s.get('profile_url', '') for s in page_shops))
                 if prev_page_sig is not None and current_sig == prev_page_sig:
-                    print(f"    [{self.platform_name}搜索] 第 {page_no} 页数据与上一页相同，停止翻页", flush=True)
+                    logger.debug(f"    [{self.platform_name}搜索] 第 {page_no} 页数据与上一页相同，停止翻页")
                     break
                 prev_page_sig = current_sig
 
                 if not page_shops:
-                    print(f"    [{self.platform_name}搜索] 第 {page_no} 页无数据，停止翻页", flush=True)
+                    logger.debug(f"    [{self.platform_name}搜索] 第 {page_no} 页无数据，停止翻页")
                     break
 
                 for shop in page_shops:
@@ -166,14 +169,16 @@ class JdPlatform(BasePlatform):
                             break
 
                 if len(all_shops) >= MAX_SHOPS:
-                    print(f"    [{self.platform_name}搜索] 已累计 {MAX_SHOPS} 个店铺，停止翻页", flush=True)
+                    logger.debug(f"    [{self.platform_name}搜索] 已累计 {MAX_SHOPS} 个店铺，停止翻页")
                     break
 
             shops_data = all_shops
-            print(f"    [{self.platform_name}搜索] 累计提取到 {len(shops_data)} 个店铺", flush=True)
+            logger.debug(f"    [{self.platform_name}搜索] 累计提取到 {len(shops_data)} 个店铺")
 
             for idx, shop in enumerate(shops_data[:MAX_SHOPS]):
-                print(f"    [{self.platform_name}搜索] 店铺 {idx + 1}: {shop.get('name', '')} | 认证：{shop.get('verify_type', '')}", flush=True)
+                logger.debug(
+                    f"    [{self.platform_name}搜索] 店铺 {idx + 1}: {shop.get('name', '')} | 认证：{shop.get('verify_type', '')}"
+                )
 
             return {
                 "brand": keyword,

@@ -8,10 +8,14 @@
 
 from __future__ import annotations
 
+import logging
+
 import config
 from core.brand_llm import SOURCE_LLM, _llm_fallback
 from core.brand_rules import _is_error_results, _synthesize_brand_answer
 from core.web_search import web_search
+
+logger = logging.getLogger(__name__)
 
 # ── 结果缓存（与 search_engine.py 的缓存机制对齐）──
 _brand_result_cache: dict | None = None
@@ -47,18 +51,18 @@ def get_cached_brand_result() -> dict | None:
 
 async def _pipeline_search(brand_name: str) -> dict:
     """查询流水线：先大模型 → 再搜索平台（百度 → Bing → 博查），每个平台逐查询词匹配。"""
-    print(f"[Brand] 开始查询品牌官网: {brand_name}", flush=True)
+    logger.info(f"[Brand] 开始查询品牌官网: {brand_name}")
 
     # ── 阶段 1：大模型优先 ──
     if config.LLM_API_KEY:
-        print("[Brand] ── 阶段 大模型（优先） ──", flush=True)
+        logger.info("[Brand] ── 阶段 大模型（优先） ──")
         llm_result = await _llm_fallback(brand_name)
         if llm_result and llm_result.get("website") and llm_result["website"] != "未找到":
-            print(f"[Brand] 大模型命中官网: {llm_result['website']}", flush=True)
+            logger.info(f"[Brand] 大模型命中官网: {llm_result['website']}")
             return llm_result
-        print("[Brand] 大模型未命中，进入搜索平台阶段", flush=True)
+        logger.info("[Brand] 大模型未命中，进入搜索平台阶段")
     else:
-        print("[Brand] LLM_API_KEY 未配置，跳过大模型阶段", flush=True)
+        logger.warning("[Brand] LLM_API_KEY 未配置，跳过大模型阶段")
 
     # ── 阶段 2：搜索平台降级链 ──
     stages: list[tuple[str, str]] = [
@@ -68,29 +72,28 @@ async def _pipeline_search(brand_name: str) -> dict:
     if config.BOCHA_API_KEY:
         stages.append(("博查", "bocha"))
     else:
-        print("[Brand] BOCHA_API_KEY 未配置，跳过博查阶段", flush=True)
+        logger.warning("[Brand] BOCHA_API_KEY 未配置，跳过博查阶段")
 
     for query in [brand_name] + [f"{brand_name}{s}" for s in _SEARCH_SUFFIXES]:
-        print(f"[Brand] ── 查询: {query} ──", flush=True)
+        logger.info(f"[Brand] ── 查询: {query} ──")
         for platform_label, engine in stages:
-            print(f"[Brand][{platform_label}] 搜索: {query}", flush=True)
+            logger.info(f"[Brand][{platform_label}] 搜索: {query}")
             results = await web_search(query, max_results=5, force_engine=engine)
             if results and not _is_error_results(results):
                 engine_tag = results[0].get("_engine", platform_label)
-                print(f"[Brand][{platform_label}] 完成: {len(results)} 条有效结果 (_engine={engine_tag})", flush=True)
+                logger.info(f"[Brand][{platform_label}] 完成: {len(results)} 条有效结果 (_engine={engine_tag})")
                 result = await _synthesize_brand_answer(brand_name, results, allow_llm_fallback=False)
                 if result.get("website") and result["website"] != "未找到":
-                    print(
+                    logger.info(
                         f"[Brand] 在 {platform_label} 命中官网: {result['website']} "
-                        f"(来源: {result.get('source', '-')})",
-                        flush=True,
+                        f"(来源: {result.get('source', '-')})"
                     )
                     return result
             else:
-                print(f"[Brand][{platform_label}] 完成: 0 条有效结果", flush=True)
-        print(f"[Brand] 查询 '{query}' 未命中，进入下一个查询", flush=True)
+                logger.info(f"[Brand][{platform_label}] 完成: 0 条有效结果")
+        logger.info(f"[Brand] 查询 '{query}' 未命中，进入下一个查询")
 
-    print("[Brand] 所有阶段均未找到官网", flush=True)
+    logger.info("[Brand] 所有阶段均未找到官网")
     return {
         "brand_name": brand_name,
         "website": "未找到",

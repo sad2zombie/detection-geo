@@ -45,3 +45,9 @@ npm start
 ```powershell
 python -m pytest tests/ -q
 ```
+
+## 日志
+
+- 默认级别 **INFO**（控制台 + `data/logs/app.log`）
+- 环境变量 `LOG_LEVEL=DEBUG|INFO|WARNING|ERROR`
+- 官网评分明细：`BRAND_SCORE_DEBUG=true`（以 DEBUG 输出）

@@ -3,12 +3,16 @@
 
 from __future__ import annotations
 
+import logging
+
 import re
 import httpx
 from urllib.parse import urlparse, urlunparse
 
 import config
 from core.web_engines.common import _is_error_result as _is_error_results
+
+logger = logging.getLogger(__name__)
 
 # UGC / 内容平台，不可作为品牌官网
 _UGC_HOST_MARKERS = (
@@ -173,7 +177,7 @@ async def _synthesize_brand_answer(
     """
     brand_name_clean = brand_name.replace(" ", "")
     brand_tokens = _extract_brand_tokens(brand_name)
-    print(f"[Brand] 品牌核心词: {brand_tokens}", flush=True)
+    logger.info(f"[Brand] 品牌核心词: {brand_tokens}")
 
     # ── URL 清洗：剥离搜索引擎重定向包装 ──
     def _clean_url(url: str) -> str:
@@ -232,11 +236,11 @@ async def _synthesize_brand_answer(
             "_engine": r.get("_engine", ""),
         })
 
-    print(f"[Brand] 解析完成: 共 {len(parsed_results)} 条有效结果", flush=True)
+    logger.info(f"[Brand] 解析完成: 共 {len(parsed_results)} 条有效结果")
 
     if not parsed_results:
         if allow_llm_fallback and config.LLM_API_KEY:
-            print("[Brand][规则] 无有效搜索结果，尝试大模型平台", flush=True)
+            logger.warning("[Brand][规则] 无有效搜索结果，尝试大模型平台")
             from core.brand_llm import _llm_fallback
             llm_result = await _llm_fallback(brand_name)
             if llm_result:
@@ -345,10 +349,10 @@ async def _synthesize_brand_answer(
 
     # 调试：打印每条结果的得分（默认关闭，BRAND_SCORE_DEBUG=true 开启）
     if config.BRAND_SCORE_DEBUG:
-        print(f"[Brand][调试] 共 {len(parsed_results)} 条结果进入评分:", flush=True)
+        logger.debug(f"[Brand][调试] 共 {len(parsed_results)} 条结果进入评分:")
         for r in parsed_results:
             score = _brand_relevance(r)
-            print(f"[Brand][调试]   标题: {r['title'][:60]}  URL: {r['url'][:40]}  得分: {score:.1f}", flush=True)
+            logger.debug(f"[Brand][调试]   标题: {r['title'][:60]}  URL: {r['url'][:40]}  得分: {score:.1f}")
 
     # ── 找官网 URL ──
     website = "未找到"
@@ -381,9 +385,9 @@ async def _synthesize_brand_answer(
         if _brand_relevance(best_official) >= MIN_BRAND_RELEVANCE:
             website = best_official["url"]
             website_item = best_official
-            print(f"[Brand] 策略1匹配(官方标记 候选{len(official_candidates)}): {best_official['title'][:50]} → {website}", flush=True)
+            logger.info(f"[Brand] 策略1匹配(官方标记 候选{len(official_candidates)}): {best_official['title'][:50]} → {website}")
         else:
-            print(f"[Brand] 策略1跳过: 官方标记候选相关度不足", flush=True)
+            logger.warning(f"[Brand] 策略1跳过: 官方标记候选相关度不足")
 
     # 策略2: 最佳相关度主域名（标题含品牌核心词 + 非内页路径）
     if website == "未找到":
@@ -396,9 +400,9 @@ async def _synthesize_brand_answer(
             if _brand_relevance(best_primary) >= MIN_BRAND_RELEVANCE:
                 website = best_primary["url"]
                 website_item = best_primary
-                print(f"[Brand] 策略2匹配(最佳相关度): {best_primary['title'][:50]} → {website}", flush=True)
+                logger.info(f"[Brand] 策略2匹配(最佳相关度): {best_primary['title'][:50]} → {website}")
             else:
-                print(f"[Brand] 策略2跳过: 最高相关度 {_brand_relevance(best_primary):.1f} 低于阈值", flush=True)
+                logger.warning(f"[Brand] 策略2跳过: 最高相关度 {_brand_relevance(best_primary):.1f} 低于阈值")
 
     # 策略 3: URL 拼音匹配（最强信号）
     if website == "未找到":
@@ -441,20 +445,20 @@ async def _synthesize_brand_answer(
                 best_pinyin = max(pinyin_candidates, key=_brand_relevance)
                 website = best_pinyin["url"]
                 website_item = best_pinyin
-                print(f"[Brand] 策略 3 匹配 (URL 拼音): {best_pinyin['title'][:50]} → {website}", flush=True)
+                logger.info(f"[Brand] 策略 3 匹配 (URL 拼音): {best_pinyin['title'][:50]} → {website}")
         except Exception as e:
-            print(f"[Brand] 策略 3 异常：{e}", flush=True)
+            logger.error(f"[Brand] 策略 3 异常：{e}")
 
     # ── URL 归一化：仅企业官网首页保留 scheme+host ──
     if website and website != "未找到":
         if _is_search_engine_host(website):
-            print(f"[Brand] 搜索引擎域名，放弃匹配: {website}", flush=True)
+            logger.warning(f"[Brand] 搜索引擎域名，放弃匹配: {website}")
             website = "未找到"
             website_item = None
         parsed = urlparse(website)
         if website != "未找到" and parsed.scheme and parsed.netloc:
             if _is_non_official_path(website):
-                print(f"[Brand] 非首页路径，放弃匹配: {website}", flush=True)
+                logger.warning(f"[Brand] 非首页路径，放弃匹配: {website}")
                 website = "未找到"
                 website_item = None
             else:
@@ -462,7 +466,7 @@ async def _synthesize_brand_answer(
                 if path not in ("", "/"):
                     normalized = urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
                     if normalized != website:
-                        print(f"[Brand] URL 归一化: {website} → {normalized}", flush=True)
+                        logger.debug(f"[Brand] URL 归一化: {website} → {normalized}")
                         website = normalized
 
     # ── 描述：优先官网 meta description，回退搜索 snippet ──
@@ -471,14 +475,14 @@ async def _synthesize_brand_answer(
         official_desc = await _fetch_official_description(website)
         if official_desc:
             description = official_desc
-            print(f"[Brand] 描述来源(官网meta): {description[:60]}", flush=True)
+            logger.info(f"[Brand] 描述来源(官网meta): {description[:60]}")
     if not description and website_item:
         description = website_item["snippet"]
-        print(f"[Brand] 描述来源(搜索snippet回退): {website_item['title'][:40]}", flush=True)
+        logger.info(f"[Brand] 描述来源(搜索snippet回退): {website_item['title'][:40]}")
 
     if website == "未找到" or not website:
         if allow_llm_fallback and config.LLM_API_KEY:
-            print("[Brand][规则] 未匹配到官网，尝试大模型平台", flush=True)
+            logger.warning("[Brand][规则] 未匹配到官网，尝试大模型平台")
             from core.brand_llm import _llm_fallback
             llm_result = await _llm_fallback(brand_name)
             if llm_result:
@@ -542,7 +546,7 @@ async def _fetch_official_description(url: str) -> str | None:
             else:
                 html = raw.decode("utf-8", errors="replace")
     except Exception as e:
-        print(f"[Brand] 官网抓取失败 {url}: {type(e).__name__}: {e}", flush=True)
+        logger.error(f"[Brand] 官网抓取失败 {url}: {type(e).__name__}: {e}")
         return None
 
     def _extract_meta(name: str) -> str:
@@ -561,7 +565,7 @@ async def _fetch_official_description(url: str) -> str | None:
     desc = _extract_meta("description")
     og = _extract_meta("og:description")
     title = _extract_title()
-    print(f"[Brand] 官网页面: {url} HTML={len(html)}字 meta={len(desc)}字 og={len(og)}字 title={len(title)}字", flush=True)
+    logger.debug(f"[Brand] 官网页面: {url} HTML={len(html)}字 meta={len(desc)}字 og={len(og)}字 title={len(title)}字")
 
     if len(desc) >= 30:
         return desc

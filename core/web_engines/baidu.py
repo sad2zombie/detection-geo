@@ -3,11 +3,15 @@
 
 from __future__ import annotations
 
+import logging
+
 import asyncio
 import json
 import time
 import random
 import httpx
+
+logger = logging.getLogger(__name__)
 
 _baidu_client: httpx.AsyncClient | None = None
 _baidu_warmed_up: bool = False
@@ -55,7 +59,7 @@ async def _get_baidu_client() -> httpx.AsyncClient:
         try:
             await _baidu_client.get("https://www.baidu.com/", headers=_baidu_headers())
             _baidu_warmed_up = True
-            print("[Baidu] 预热完成，已获取 cookie", flush=True)
+            logger.info("[Baidu] 预热完成，已获取 cookie")
         except Exception:
             pass
     return _baidu_client
@@ -68,7 +72,7 @@ async def _reset_baidu_client() -> None:
         await _baidu_client.aclose()
     _baidu_client = None
     _baidu_warmed_up = False
-    print("[Baidu] 客户端已重置（cookie 清除）", flush=True)
+    logger.info("[Baidu] 客户端已重置（cookie 清除）")
 
 
 def is_in_cooldown() -> bool:
@@ -128,7 +132,7 @@ async def _resolve_baidu_redirects(results: list[dict]) -> None:
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
         resolved = sum(1 for r in results if "baidu.com" not in r.get("url", ""))
-        print(f"[Baidu] URL 解析: {resolved}/{len(tasks)} 成功", flush=True)
+        logger.info(f"[Baidu] URL 解析: {resolved}/{len(tasks)} 成功")
 
 
 def _attach_snippets_by_position(html: str, results: list[dict]) -> None:
@@ -177,7 +181,7 @@ def _attach_snippets_by_position(html: str, results: list[dict]) -> None:
         except Exception:
             continue
 
-    print(f"[Baidu] snippet 源: class={len(class_snips)} s-data={len(sdata_snips)}", flush=True)
+    logger.debug(f"[Baidu] snippet 源: class={len(class_snips)} s-data={len(sdata_snips)}")
 
     # 3. 合并两个数据源，按位置排序，对每条结果取其后最近的未使用 snippet
     all_snips = sorted(class_snips + sdata_snips, key=lambda x: x[0])
@@ -199,7 +203,7 @@ async def _search_baidu_browser(query: str, max_results: int = 5) -> list[dict]:
     """百度搜索（CloakBrowser 真实浏览器版本，反风控能力强）。
     HTTP 版被拦截时自动降级到此版本。
     """
-    print(f"[Baidu-Browser] 搜索: {query}", flush=True)
+    logger.info(f"[Baidu-Browser] 搜索: {query}")
     try:
         from core.browser_manager import get_browser_manager
         from config import COOKIE_DIR
@@ -218,7 +222,7 @@ async def _search_baidu_browser(query: str, max_results: int = 5) -> list[dict]:
             # 检查是否被拦截
             content = await page.content()
             if "百度安全验证" in content:
-                print("[Baidu-Browser] 安全验证拦截", flush=True)
+                logger.warning("[Baidu-Browser] 安全验证拦截")
                 return [{"title": "百度被拦截", "url": "", "snippet": "浏览器版也被拦截"}]
 
             # 提取搜索结果
@@ -236,7 +240,7 @@ async def _search_baidu_browser(query: str, max_results: int = 5) -> list[dict]:
                 return out;
             }""", max_results)
 
-            print(f"[Baidu-Browser] 提取到 {len(results)} 条结果", flush=True)
+            logger.info(f"[Baidu-Browser] 提取到 {len(results)} 条结果")
 
             # 解析百度跳转链接
             if results:
@@ -245,7 +249,7 @@ async def _search_baidu_browser(query: str, max_results: int = 5) -> list[dict]:
             return results if results else [{"title": "百度搜索", "url": "", "snippet": "未找到结果"}]
 
     except Exception as e:
-        print(f"[Baidu-Browser] 异常: {type(e).__name__}: {e}", flush=True)
+        logger.error(f"[Baidu-Browser] 异常: {type(e).__name__}: {e}")
         return [{"title": "百度搜索错误", "url": "", "snippet": str(e)}]
 
 
@@ -256,7 +260,7 @@ async def _search_baidu(query: str, max_results: int = 5) -> list[dict]:
 
     await _baidu_throttle()
 
-    print(f"[Baidu] 搜索: {query}", flush=True)
+    logger.info(f"[Baidu] 搜索: {query}")
 
     client = await _get_baidu_client()
     try:
@@ -266,13 +270,13 @@ async def _search_baidu(query: str, max_results: int = 5) -> list[dict]:
             headers=_baidu_headers(),
         )
         if resp.status_code != 200:
-            print(f"[Baidu] HTTP {resp.status_code}", flush=True)
+            logger.info(f"[Baidu] HTTP {resp.status_code}")
             return [{"title": "百度搜索失败", "url": "", "snippet": f"HTTP {resp.status_code}"}]
 
         html = resp.text
 
         if "百度安全验证" in html or len(html) < 5000:
-            print(f"[Baidu] 安全验证拦截，HTML长度={len(html)}", flush=True)
+            logger.warning(f"[Baidu] 安全验证拦截，HTML长度={len(html)}")
             return [{
                 "title": "百度被拦截",
                 "url": "",
@@ -310,7 +314,7 @@ async def _search_baidu(query: str, max_results: int = 5) -> list[dict]:
                 })
             if len(results) >= max_results:
                 break
-        print(f"[Baidu] h3.t 匹配 {total_h3} 条，过滤 baidu.php 广告 {filtered_ad} 条，取自然结果 {len(results)} 条", flush=True)
+        logger.debug(f"[Baidu] h3.t 匹配 {total_h3} 条，过滤 baidu.php 广告 {filtered_ad} 条，取自然结果 {len(results)} 条")
 
         if results:
             await _resolve_baidu_redirects(results)
@@ -328,9 +332,9 @@ async def _search_baidu(query: str, max_results: int = 5) -> list[dict]:
                         else:
                             break
                     if best_mu:
-                        print(f"[Baidu] mu 回退: {url[:50]}... → {best_mu}", flush=True)
+                        logger.debug(f"[Baidu] mu 回退: {url[:50]}... → {best_mu}")
                         r["url"] = best_mu
-        print(f"[Baidu] 解析到 {len(results)} 条结果", flush=True)
+        logger.info(f"[Baidu] 解析到 {len(results)} 条结果")
 
         _attach_snippets_by_position(html, results)
 
@@ -343,5 +347,5 @@ async def _search_baidu(query: str, max_results: int = 5) -> list[dict]:
 
         return results
     except Exception as e:
-        print(f"[Baidu] 异常: {type(e).__name__}: {e}", flush=True)
+        logger.error(f"[Baidu] 异常: {type(e).__name__}: {e}")
         return [{"title": "百度搜索错误", "url": "", "snippet": str(e)}]

@@ -3,9 +3,13 @@
 
 from __future__ import annotations
 
+import logging
+
 import json
 
 import config
+
+logger = logging.getLogger(__name__)
 
 _producer = None
 
@@ -76,11 +80,10 @@ async def send_result(result: dict) -> None:
     payload = prepare_kafka_payload(result)
     producer = await _get_producer()
     await producer.send_and_wait(config.KAFKA_RESULT_TOPIC, payload)
-    print(
+    logger.info(
         f"[Kafka] 已发送 task_id={payload.get('task_id')} "
         f"platform={payload.get('results', {}).get('platform')} "
-        f"status={payload.get('status')} topic={config.KAFKA_RESULT_TOPIC}",
-        flush=True,
+        f"status={payload.get('status')} topic={config.KAFKA_RESULT_TOPIC}"
     )
 
 

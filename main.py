@@ -2,8 +2,11 @@
 """品牌检测系统入口"""
 
 import atexit
+import logging
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Windows 下让 print/日志输出正常显示中文
 # 方式：直接写 sys.stdout.buffer（绕过 TextIOWrapper 的 GBK 编码层），内容保持 UTF-8
@@ -91,9 +94,15 @@ atexit.register(_shutdown_browser_manager)
 if __name__ == "__main__":
     import uvicorn
     from web.server import app
-    print("=" * 50)
-    print("  品牌认证检测系统")
-    print("  打开浏览器访问: http://127.0.0.1:8000")
-    print(f"  运行日志: {RUNTIME_LOG_FILE}")
-    print("=" * 50)
+    logger.info(
+        "\n".join(
+            [
+                "=" * 50,
+                "  品牌认证检测系统",
+                "  打开浏览器访问: http://127.0.0.1:8000",
+                f"  运行日志: {RUNTIME_LOG_FILE}",
+                "=" * 50,
+            ]
+        )
+    )
     uvicorn.run(app, host="127.0.0.1", port=8000)

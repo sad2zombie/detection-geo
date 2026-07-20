@@ -3,9 +3,13 @@
 
 from __future__ import annotations
 
+import logging
+
 import httpx
 
 import config
+
+logger = logging.getLogger(__name__)
 
 async def _search_bocha(query: str, max_results: int = 5) -> list[dict]:
     """博查 AI 搜索 API（https://open.bochaai.com），中文搜索质量最佳。"""
@@ -39,8 +43,8 @@ async def _search_bocha(query: str, max_results: int = 5) -> list[dict]:
                     "url": item.get("url", ""),
                     "snippet": item.get("summary", "") or item.get("snippet", ""),
                 })
-            print(f"[Bocha] 查询: {query}, 解析到 {len(results)} 条结果", flush=True)
+            logger.info(f"[Bocha] 查询: {query}, 解析到 {len(results)} 条结果")
             return results
         except Exception as e:
-            print(f"[Bocha] 请求异常: {type(e).__name__}: {e}", flush=True)
+            logger.error(f"[Bocha] 请求异常: {type(e).__name__}: {e}")
             return [{"title": "搜索错误", "url": "", "snippet": f"博查搜索失败: {e}"}]

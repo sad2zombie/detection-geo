@@ -2,11 +2,14 @@
 """淘宝平台搜索模块（仅 _do_search 核心逻辑）"""
 
 import asyncio
+import logging
 from urllib.parse import quote
 
 from config import TAOBAO_PROFILE
 from platforms.base import BasePlatform, SearchResult
 from platforms import register_platform
+
+logger = logging.getLogger(__name__)
 
 
 @register_platform
@@ -21,14 +24,14 @@ class TaobaoPlatform(BasePlatform):
         await self._ensure_browser(headless=False)
         search_url = f"https://s.taobao.com/search?q={quote(keyword)}&type=shop"
 
-        print(f"    [{self.platform_name}搜索] 正在搜索: {keyword}", flush=True)
+        logger.debug(f"    [{self.platform_name}搜索] 正在搜索: {keyword}")
 
         try:
             if not await self._goto_with_retry(search_url):
                 return self._err_result(keyword, search_url, "导航淘宝搜索页失败")
 
             await asyncio.sleep(4)
-            print(f"    [{self.platform_name}搜索] URL 跳转完成，等待渲染", flush=True)
+            logger.debug(f"    [{self.platform_name}搜索] URL 跳转完成，等待渲染")
 
             # 点击「店铺」tab 切换视图
             try:
@@ -36,11 +39,11 @@ class TaobaoPlatform(BasePlatform):
                 if await shop_tab.count() > 0:
                     await shop_tab.first.click()
                     await asyncio.sleep(3)
-                    print(f"    [{self.platform_name}搜索] 已点击「店铺」tab，等待列表渲染", flush=True)
+                    logger.debug(f"    [{self.platform_name}搜索] 已点击「店铺」tab，等待列表渲染")
                 else:
-                    print(f"    [{self.platform_name}搜索] 未找到「店铺」tab，跳过点击", flush=True)
+                    logger.warning(f"    [{self.platform_name}搜索] 未找到「店铺」tab，跳过点击")
             except Exception as tab_err:
-                print(f"    [{self.platform_name}搜索] 点击「店铺」tab 失败（忽略）: {tab_err}", flush=True)
+                logger.warning(f"    [{self.platform_name}搜索] 点击「店铺」tab 失败（忽略）: {tab_err}")
 
             # 滚动加载更多店铺
             try:
@@ -50,12 +53,16 @@ class TaobaoPlatform(BasePlatform):
                     current_count = await self._page.evaluate(
                         "document.querySelectorAll('[class*=\"shopCard--\"]').length"
                     )
-                    print(f"    [{self.platform_name}搜索] 滚动第 {scroll_round + 1} 次，当前店铺数: {current_count}", flush=True)
+                    logger.debug(
+                        f"    [{self.platform_name}搜索] 滚动第 {scroll_round + 1} 次，当前店铺数: {current_count}"
+                    )
                     if current_count >= 15:
-                        print(f"    [{self.platform_name}搜索] 已加载 {current_count} 个店铺，满足条件，停止滚动", flush=True)
+                        logger.debug(
+                            f"    [{self.platform_name}搜索] 已加载 {current_count} 个店铺，满足条件，停止滚动"
+                        )
                         break
             except Exception as scroll_err:
-                print(f"    [{self.platform_name}搜索] 滚动加载失败（忽略）: {scroll_err}", flush=True)
+                logger.warning(f"    [{self.platform_name}搜索] 滚动加载失败（忽略）: {scroll_err}")
 
             shops_data = await self._page.evaluate("""() => {
                 const results = [];
@@ -94,10 +101,12 @@ class TaobaoPlatform(BasePlatform):
                 return results;
             }""")
 
-            print(f"    [{self.platform_name}搜索] 提取到 {len(shops_data)} 个店铺卡片数据", flush=True)
+            logger.debug(f"    [{self.platform_name}搜索] 提取到 {len(shops_data)} 个店铺卡片数据")
 
             for idx, shop in enumerate(shops_data[:15]):
-                print(f"    [{self.platform_name}搜索] 店铺 {idx + 1}: {shop.get('name', '')} | 粉丝：{shop.get('follower_count', '')}", flush=True)
+                logger.debug(
+                    f"    [{self.platform_name}搜索] 店铺 {idx + 1}: {shop.get('name', '')} | 粉丝：{shop.get('follower_count', '')}"
+                )
 
             return {
                 "brand": keyword,

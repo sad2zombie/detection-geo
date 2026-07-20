@@ -2,11 +2,14 @@
 """小红书平台搜索模块（仅 _do_search 核心逻辑）"""
 
 import asyncio
+import logging
 import random
 
 from config import XHS_PROFILE
 from platforms.base import BasePlatform, SearchResult
 from platforms import register_platform
+
+logger = logging.getLogger(__name__)
 
 
 @register_platform
@@ -70,10 +73,10 @@ class XiaohongshuPlatform(BasePlatform):
                 await asyncio.sleep(random.uniform(0.8, 1.5))
 
             if input_locator is None:
-                print(f"    [{self.platform_name}搜索] 未找到搜索输入框，直接返回无数据", flush=True)
+                logger.warning(f"    [{self.platform_name}搜索] 未找到搜索输入框，直接返回无数据")
                 return self._err_result(keyword, "https://www.xiaohongshu.com", "未找到搜索输入框")
 
-            print(f"    [{self.platform_name}搜索] 定位搜索输入框: {found_input_sel}", flush=True)
+            logger.debug(f"    [{self.platform_name}搜索] 定位搜索输入框: {found_input_sel}")
             await asyncio.sleep(3)
 
             set_value_ok = False
@@ -94,22 +97,22 @@ class XiaohongshuPlatform(BasePlatform):
                 )
                 if eval_result and eval_result.get("ok"):
                     set_value_ok = True
-                    print(f"    [{self.platform_name}搜索] evaluate 设置值成功: {eval_result.get('value')}", flush=True)
+                    logger.debug(f"    [{self.platform_name}搜索] evaluate 设置值成功: {eval_result.get('value')}")
                 else:
-                    print(f"    [{self.platform_name}搜索] evaluate 设置值失败: {eval_result}", flush=True)
+                    logger.debug(f"    [{self.platform_name}搜索] evaluate 设置值失败: {eval_result}")
             except Exception as eval_err:
-                print(f"    [{self.platform_name}搜索] evaluate 异常: {str(eval_err)[:80]}", flush=True)
+                logger.warning(f"    [{self.platform_name}搜索] evaluate 异常: {str(eval_err)[:80]}")
 
             if not set_value_ok:
                 try:
                     await input_locator.fill(keyword, timeout=3000)
-                    print(f"    [{self.platform_name}搜索] fill 关键词成功: {keyword}", flush=True)
+                    logger.debug(f"    [{self.platform_name}搜索] fill 关键词成功: {keyword}")
                 except Exception as fill_err:
-                    print(f"    [{self.platform_name}搜索] fill 也失败: {str(fill_err)[:80]}", flush=True)
+                    logger.warning(f"    [{self.platform_name}搜索] fill 也失败: {str(fill_err)[:80]}")
                     try:
                         await input_locator.click(timeout=3000)
                         await self._page.keyboard.type(keyword, delay=30)
-                        print(f"    [{self.platform_name}搜索] keyboard.type 成功", flush=True)
+                        logger.debug(f"    [{self.platform_name}搜索] keyboard.type 成功")
                     except Exception as type_err:
                         return self._err_result(keyword, "https://www.xiaohongshu.com", f"输入关键词失败: {str(type_err)[:80]}")
 
@@ -133,11 +136,11 @@ class XiaohongshuPlatform(BasePlatform):
                         current_value = await asyncio.wait_for(input_locator.input_value(), timeout=3)
                     except Exception:
                         pass
-            print(f"    [{self.platform_name}搜索] 输入框当前值: '{current_value}'", flush=True)
+            logger.debug(f"    [{self.platform_name}搜索] 输入框当前值: '{current_value}'")
             if not current_value:
                 return self._err_result(keyword, "https://www.xiaohongshu.com", "输入框为空")
 
-            print(f"    [{self.platform_name}搜索] 按下回车，搜索关键词: {keyword}", flush=True)
+            logger.debug(f"    [{self.platform_name}搜索] 按下回车，搜索关键词: {keyword}")
 
             # 优先点击搜索按钮
             search_clicked = False
@@ -152,13 +155,13 @@ class XiaohongshuPlatform(BasePlatform):
                         except Exception:
                             await btn.click(timeout=3000, force=True)
                         search_clicked = True
-                        print(f"    [{self.platform_name}搜索] 点击搜索按钮成功: {sel}", flush=True)
+                        logger.debug(f"    [{self.platform_name}搜索] 点击搜索按钮成功: {sel}")
                         break
                 except Exception:
                     continue
 
             if not search_clicked:
-                print(f"    [{self.platform_name}搜索] 未找到搜索按钮，尝试按 Enter", flush=True)
+                logger.warning(f"    [{self.platform_name}搜索] 未找到搜索按钮，尝试按 Enter")
                 # 回退：按 Enter 触发搜索
                 try:
                     await input_locator.click(timeout=3000, force=True)
@@ -169,7 +172,7 @@ class XiaohongshuPlatform(BasePlatform):
                 except Exception:
                     pass
                 await self._page.keyboard.press("Enter")
-                print(f"    [{self.platform_name}搜索] 按 Enter 触发搜索", flush=True)
+                logger.debug(f"    [{self.platform_name}搜索] 按 Enter 触发搜索")
 
             await asyncio.sleep(random.uniform(2.5,3.5))
 
@@ -214,12 +217,12 @@ class XiaohongshuPlatform(BasePlatform):
             if tab_clicked:
                 await asyncio.sleep(random.uniform(3.5,3.9))
             else:
-                print(f"    [{self.platform_name}搜索] 未找到用户tab，继续使用当前页面", flush=True)
+                logger.warning(f"    [{self.platform_name}搜索] 未找到用户tab，继续使用当前页面")
 
             for i in range(3):
                 await self._page.evaluate("window.scrollBy(0, 600)")
                 await asyncio.sleep(1.5)
-                print(f"    [{self.platform_name}搜索] 滚动第 {i + 1} 次", flush=True)
+                logger.debug(f"    [{self.platform_name}搜索] 滚动第 {i + 1} 次")
 
             users_data = await self._page.evaluate(r"""() => {
                 const results = [];
@@ -295,7 +298,7 @@ class XiaohongshuPlatform(BasePlatform):
                 return results;
             }""")
 
-            print(f"    [{self.platform_name}搜索] 提取到 {len(users_data)} 个用户卡片数据", flush=True)
+            logger.debug(f"    [{self.platform_name}搜索] 提取到 {len(users_data)} 个用户卡片数据")
 
             final_users = users_data[:30]
 

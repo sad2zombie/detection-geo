@@ -3,16 +3,20 @@
 
 from __future__ import annotations
 
+import logging
+
 import httpx
 
 import config
+
+logger = logging.getLogger(__name__)
 
 async def _search_bing_html(query: str, max_results: int = 5) -> list[dict]:
     """Bing HTML 抓取（无需 API Key），风控比百度宽松得多。"""
     import re
     from html import unescape
 
-    print(f"[Bing] 搜索: {query}", flush=True)
+    logger.info(f"[Bing] 搜索: {query}")
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -29,7 +33,7 @@ async def _search_bing_html(query: str, max_results: int = 5) -> list[dict]:
                 headers=headers,
             )
             if resp.status_code != 200:
-                print(f"[Bing] HTTP {resp.status_code}", flush=True)
+                logger.info(f"[Bing] HTTP {resp.status_code}")
                 return [{"title": "Bing搜索失败", "url": "", "snippet": f"HTTP {resp.status_code}"}]
 
             html = resp.text
@@ -64,14 +68,14 @@ async def _search_bing_html(query: str, max_results: int = 5) -> list[dict]:
                 if len(results) >= max_results:
                     break
 
-            print(f"[Bing] 解析到 {len(results)} 条结果", flush=True)
+            logger.info(f"[Bing] 解析到 {len(results)} 条结果")
 
             if not results:
                 return [{"title": "Bing搜索", "url": f"https://cn.bing.com/search?q={query}", "snippet": "未找到结果"}]
 
             return results
         except Exception as e:
-            print(f"[Bing] 异常: {type(e).__name__}: {e}", flush=True)
+            logger.error(f"[Bing] 异常: {type(e).__name__}: {e}")
             return [{"title": "Bing搜索错误", "url": "", "snippet": str(e)}]
 
 
@@ -107,7 +111,7 @@ async def _search_bing_browser(query: str, max_results: int = 5) -> list[dict]:
     import re
     from html import unescape
 
-    print(f"[Bing-Browser] 搜索: {query}", flush=True)
+    logger.info(f"[Bing-Browser] 搜索: {query}")
     try:
         from core.browser_manager import get_browser_manager
         from config import COOKIE_DIR
@@ -142,9 +146,9 @@ async def _search_bing_browser(query: str, max_results: int = 5) -> list[dict]:
                 return out;
             }""", max_results)
 
-            print(f"[Bing-Browser] 提取到 {len(results)} 条结果", flush=True)
+            logger.info(f"[Bing-Browser] 提取到 {len(results)} 条结果")
             return results if results else [{"title": "Bing搜索", "url": "", "snippet": "未找到结果"}]
 
     except Exception as e:
-        print(f"[Bing-Browser] 异常: {type(e).__name__}: {e}", flush=True)
+        logger.error(f"[Bing-Browser] 异常: {type(e).__name__}: {e}")
         return [{"title": "Bing搜索错误", "url": "", "snippet": str(e)}]

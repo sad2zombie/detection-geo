@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """搜索调度器 — 多平台搜索编排 + detect 入口（匹配/忙锁已拆出）。"""
 
+import logging
+
 import asyncio
 import json
 from datetime import datetime
@@ -29,6 +31,8 @@ from core.detect_result import (
     format_detect_errors,
     wrap_platform_result,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -221,7 +225,7 @@ async def search_platforms_async(
             result["saved_to"] = filepath
             results.append(result)
         except asyncio.TimeoutError:
-            print(f"[Search] {key} 平台检测超时（{int(platform_timeout)}秒）", flush=True)
+            logger.warning(f"[Search] {key} 平台检测超时（{int(platform_timeout)}秒）")
             results.append({
                 "brand": keyword,
                 "platform": key,

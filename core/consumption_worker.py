@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import asyncio
 
 import httpx
@@ -10,6 +12,8 @@ import httpx
 import config
 from core.consumption_log import add_log
 from core.kafka_producer import build_empty_result, send_result
+
+logger = logging.getLogger(__name__)
 
 _poll_lock = asyncio.Lock()
 _poll_platform_index = 0  # 当前轮询到的平台索引
@@ -108,9 +112,8 @@ async def _fetch_task(client: httpx.AsyncClient, platform_key: str) -> dict | No
     except ValueError:
         return None
     if platform != platform_key:
-        print(
-            f"[Consumption] 服务器返回 platform={platform_raw!r} 与请求 {platform_key!r} 不一致，已忽略",
-            flush=True,
+        logger.warning(
+            f"[Consumption] 服务器返回 platform={platform_raw!r} 与请求 {platform_key!r} 不一致，已忽略"
         )
         return None
     return {
@@ -194,13 +197,12 @@ async def poll_once() -> dict:
             return {"ok": True, "fetched": False, "reason": "无可用平台"}
 
         if _is_platform_busy(platform_key):
-            print(
-                f"[Consumption] 平台忙碌，跳过拉取 platform={platform_key}",
-                flush=True,
+            logger.warning(
+                f"[Consumption] 平台忙碌，跳过拉取 platform={platform_key}"
             )
             return {"ok": True, "fetched": False, "reason": f"平台 {platform_key} 忙碌"}
 
-        print(f"[Consumption] 拉取任务 platform={platform_key}", flush=True)
+        logger.info(f"[Consumption] 拉取任务 platform={platform_key}")
         timeout = httpx.Timeout(30.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
             task = await _fetch_task(client, platform_key)
@@ -211,9 +213,8 @@ async def poll_once() -> dict:
         task_id = str(task["task_id"]).strip()
         keyword = task["keyword"]
         platform_key = task["platform"]
-        print(
-            f"[Consumption] 收到任务 task_id={task_id} keyword={keyword} platform={platform_key}",
-            flush=True,
+        logger.info(
+            f"[Consumption] 收到任务 task_id={task_id} keyword={keyword} platform={platform_key}"
         )
         add_log(task_id, "入库")
 

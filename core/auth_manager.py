@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 """登录状态管理器（异步版本）"""
 
+import logging
+
 import asyncio
 from typing import Any
 
 from platforms import get_platform
 from platforms.base import BasePlatform
+
+logger = logging.getLogger(__name__)
 
 
 class AuthManager:
@@ -97,7 +101,7 @@ class AuthManager:
             return {"success": False, "error": "不支持的平台"}
         try:
             if url:
-                print(f"[AuthManager] login_platform: 打开 {url}", flush=True)
+                logger.info(f"[AuthManager] login_platform: 打开 {url}")
                 await self._open_profile(p, url)
                 return {"success": True, "platform": platform_key, "platform_name": p.platform_name, "opened": True, "url": url}
             success = await p.login()
@@ -105,7 +109,7 @@ class AuthManager:
                 return {"success": False, "platform": platform_key, "platform_name": p.platform_name, "error": "closed"}
             return {"success": True, "platform": platform_key, "platform_name": p.platform_name}
         except Exception as e:
-            print(f"[AuthManager] login_platform 异常: {type(e).__name__}: {e}", flush=True)
+            logger.error(f"[AuthManager] login_platform 异常: {type(e).__name__}: {e}")
             return {"success": False, "platform": platform_key, "error": str(e)}
 
     def _bump_login_session(self, platform_key: str) -> int:
@@ -128,27 +132,27 @@ class AuthManager:
         p._page = None
         try:
             await p._bm.release()
-            print("[AuthManager] 浏览器资源已释放", flush=True)
+            logger.info("[AuthManager] 浏览器资源已释放")
         except Exception as e:
-            print(f"[AuthManager] release 异常（忽略）: {e}", flush=True)
+            logger.warning(f"[AuthManager] release 异常（忽略）: {e}")
 
     async def _open_profile(self, p: BasePlatform, url: str) -> None:
         """用平台持久化 profile 启动有头浏览器，在首个窗口直接打开 url。"""
         await self._cancel_login_wait_task(p.platform_key)
         session = self._bump_login_session(p.platform_key)
 
-        print(f"[AuthManager] _open_profile: 启动浏览器 (session={session})", flush=True)
+        logger.info(f"[AuthManager] _open_profile: 启动浏览器 (session={session})")
         try:
             p._ctx, page = await p._bm.ensure_page(p.profile_dir, headless=False)
         except Exception as e:
-            print(f"[AuthManager] _open_profile 启动浏览器失败: {type(e).__name__}: {e}", flush=True)
+            logger.error(f"[AuthManager] _open_profile 启动浏览器失败: {type(e).__name__}: {e}")
             await self._release_login_browser(p)
             raise
 
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=30000)
         except Exception as e:
-            print(f"[AuthManager] open_profile goto 失败（保留窗口）: {e}", flush=True)
+            logger.warning(f"[AuthManager] open_profile goto 失败（保留窗口）: {e}")
 
         async def _wait_close_and_release():
             """等待用户关闭页面/浏览器，然后释放资源。"""
@@ -159,24 +163,24 @@ class AuthManager:
                 while not close_task.done():
                     await asyncio.sleep(2)
                     if not self._login_sessions.get(p.platform_key) == session:
-                        print("[AuthManager] 会话已被新请求取代，停止等待", flush=True)
+                        logger.info("[AuthManager] 会话已被新请求取代，停止等待")
                         close_task.cancel()
                         break
                     try:
                         ctx = p._bm.get_context()
                         if ctx is None:
-                            print("[AuthManager] context 已消失，触发释放", flush=True)
+                            logger.info("[AuthManager] context 已消失，触发释放")
                             close_task.cancel()
                             break
                         _ = page.url
                     except Exception:
-                        print("[AuthManager] page 已关闭，触发释放", flush=True)
+                        logger.info("[AuthManager] page 已关闭，触发释放")
                         close_task.cancel()
                         break
             except asyncio.CancelledError:
                 pass
             except Exception as e:
-                print(f"[AuthManager] wait_close 异常（忽略）: {e}", flush=True)
+                logger.warning(f"[AuthManager] wait_close 异常（忽略）: {e}")
             finally:
                 await self._release_login_browser(p)
 

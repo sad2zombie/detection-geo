@@ -2,11 +2,14 @@
 """平台抽象基类 + 公共实现（Browser 生命周期 / 登录 / 搜索重试 全部上移）"""
 
 import asyncio
+import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, TypedDict
 
 from core.browser_manager import get_browser_manager
+
+logger = logging.getLogger(__name__)
 
 
 class UserResult(TypedDict, total=False):
@@ -149,9 +152,8 @@ class BasePlatform(ABC):
                 return True
             except Exception as goto_err:
                 err_str = str(goto_err)
-                print(
-                    f"    [{self.platform_name}导航] 第 {attempt + 1} 次失败 ({url[:60]}...): {err_str[:120]}",
-                    flush=True,
+                logger.warning(
+                    f"    [{self.platform_name}导航] 第 {attempt + 1} 次失败 ({url[:60]}...): {err_str[:120]}"
                 )
                 if attempt < retries:
                     page_ok = False
@@ -165,9 +167,9 @@ class BasePlatform(ABC):
                     if not page_ok:
                         await self._bm.shutdown()
                         await self._ensure_browser()
-                    print(f"    [{self.platform_name}导航] 新建 page 完成，准备重试…", flush=True)
+                    logger.warning(f"    [{self.platform_name}导航] 新建 page 完成，准备重试…")
                 else:
-                    print(f"    [{self.platform_name}导航] 重试耗尽，放弃", flush=True)
+                    logger.warning(f"    [{self.platform_name}导航] 重试耗尽，放弃")
                     return False
         return False
 
@@ -218,9 +220,8 @@ class BasePlatform(ABC):
         await asyncio.sleep(3)
         await self._inject_save_button()
 
-        print(
-            f"    [{self.platform_name} Login] Browser opened, finish login and click [SAVE] in top-right corner",
-            flush=True,
+        logger.info(
+            f"    [{self.platform_name} Login] Browser opened, finish login and click [SAVE] in top-right corner"
         )
 
         max_wait = self.LOGIN_MAX_WAIT_SECONDS
@@ -230,23 +231,22 @@ class BasePlatform(ABC):
             await asyncio.sleep(2)
             elapsed += 2
             if self._page is None or self._page.is_closed() or not self._bm.is_alive():
-                print(f"    [{self.platform_name}登录] 检测到浏览器/页面已关闭，结束等待", flush=True)
+                logger.warning(f"    [{self.platform_name}登录] 检测到浏览器/页面已关闭，结束等待")
                 await self.close()
                 return False
             try:
                 saved = await self._page.evaluate("() => window.__cloak_saved || false")
                 if saved:
                     await asyncio.sleep(1)
-                    print(f"    [{self.platform_name}登录] Cookie已保存！关闭浏览器…", flush=True)
+                    logger.info(f"    [{self.platform_name}登录] Cookie已保存！关闭浏览器…")
                     await self.close()
                     return True
                 eval_fail_streak = 0
             except Exception as eval_err:
                 eval_fail_streak += 1
                 if eval_fail_streak >= 2:
-                    print(
-                        f"    [{self.platform_name}登录] 浏览器无响应（连续失败 {eval_fail_streak} 次）: {str(eval_err)[:80]}",
-                        flush=True,
+                    logger.error(
+                        f"    [{self.platform_name}登录] 浏览器无响应（连续失败 {eval_fail_streak} 次）: {str(eval_err)[:80]}"
                     )
                     await self.close()
                     return False
@@ -282,18 +282,14 @@ class BasePlatform(ABC):
                 }
             if result.get("total_found", 0) > 0:
                 if attempt > 0:
-                    print(
-                        f"    [{self.platform_name}搜索] 第 {attempt + 1} 次尝试成功，获得 {result.get('total_found', 0)} 条数据",
-                        flush=True,
+                    logger.info(
+                        f"    [{self.platform_name}搜索] 第 {attempt + 1} 次尝试成功，获得 {result.get('total_found', 0)} 条数据"
                     )
                 return result
-            print(
-                f"    [{self.platform_name}搜索] 第 {attempt + 1} 次结果为空（{result.get('error', '未知')[:60]}），",
-                flush=True,
-                end="",
-            )
             if attempt < self.SEARCH_MAX_RETRIES:
-                print("重试…", flush=True)
+                logger.warning(
+                    f"    [{self.platform_name}搜索] 第 {attempt + 1} 次结果为空（{result.get('error', '未知')[:60]}），重试…"
+                )
                 try:
                     await self._bm.shutdown()
                 except Exception:
@@ -303,7 +299,9 @@ class BasePlatform(ABC):
                 # 沿用当前 headless 模式，避免自动化检测重试时突然弹窗
                 await self._ensure_browser(headless=None)
             else:
-                print("重试耗尽，返回空结果", flush=True)
+                logger.warning(
+                    f"    [{self.platform_name}搜索] 第 {attempt + 1} 次结果为空（{result.get('error', '未知')[:60]}），重试耗尽，返回空结果"
+                )
         return {
             "brand": keyword,
             "platform": self.platform_key,

@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import json
 import re
 import httpx
@@ -10,6 +12,8 @@ from urllib.parse import urlparse, urlunparse
 
 from core.llm_client import llm_chat
 from core.brand_rules import _is_search_engine_host, _is_ugc_host
+
+logger = logging.getLogger(__name__)
 
 SOURCE_LLM = "大模型"
 
@@ -83,19 +87,19 @@ async def _verify_page_reachable(website: str) -> bool:
         async with httpx.AsyncClient(timeout=5, follow_redirects=True) as client:
             resp = await client.get(url, headers=_UA)
             if resp.status_code < 400:
-                print(f"[Brand][验证] URL可达: {url} (status={resp.status_code})", flush=True)
+                logger.info(f"[Brand][验证] URL可达: {url} (status={resp.status_code})")
                 return True
             if resp.status_code in (403, 429):
-                print(f"[Brand][验证] URL被拦截但存在: {url} (status={resp.status_code})", flush=True)
+                logger.warning(f"[Brand][验证] URL被拦截但存在: {url} (status={resp.status_code})")
                 return True
-            print(f"[Brand][验证] URL不可达: {url} (status={resp.status_code})", flush=True)
+            logger.warning(f"[Brand][验证] URL不可达: {url} (status={resp.status_code})")
             return False
 
     except httpx.TimeoutException:
-        print(f"[Brand][验证] 页面超时: {url}", flush=True)
+        logger.warning(f"[Brand][验证] 页面超时: {url}")
         return False
     except Exception as e:
-        print(f"[Brand][验证] 页面请求失败: {url} ({e})", flush=True)
+        logger.error(f"[Brand][验证] 页面请求失败: {url} ({e})")
         return False
 
 
@@ -118,28 +122,28 @@ async def _llm_query_once(brand_name: str, query: str) -> tuple[dict | None, boo
     content = response.get("content", "").strip()
     json_match = re.search(r'\{[^{}]+\}', content)
     if not json_match:
-        print(f"[Brand][大模型] 返回格式异常 (query={query!r}): {content[:200]}", flush=True)
+        logger.warning(f"[Brand][大模型] 返回格式异常 (query={query!r}): {content[:200]}")
         return None, False
 
     data = json.loads(json_match.group())
     website = (data.get("website") or "").strip()
     description = (data.get("description") or "").strip()
     if _is_llm_not_found(website):
-        print(f"[Brand][大模型] 未找到 (query={query!r})", flush=True)
+        logger.info(f"[Brand][大模型] 未找到 (query={query!r})")
         return None, True
 
     if not _is_valid_llm_website(website):
-        print(f"[Brand][大模型] 无效官网已丢弃 (query={query!r}): {website!r}", flush=True)
+        logger.warning(f"[Brand][大模型] 无效官网已丢弃 (query={query!r}): {website!r}")
         return None, False
 
     # URL 可达性验证：能访问就算通过
     reachable = await _verify_page_reachable(website)
     if not reachable:
-        print(f"[Brand][大模型] 验证未通过 (query={query!r}): {website!r}", flush=True)
+        logger.warning(f"[Brand][大模型] 验证未通过 (query={query!r}): {website!r}")
         return None, False
 
     website = _normalize_llm_website(website)
-    print(f"[Brand][大模型] 命中 (query={query!r}): {website}", flush=True)
+    logger.info(f"[Brand][大模型] 命中 (query={query!r}): {website}")
     return {
         "brand_name": brand_name,
         "website": website,
@@ -158,13 +162,13 @@ async def _llm_fallback(brand_name: str) -> dict | None:
     ]
     try:
         for query in queries:
-            print(f"[Brand][大模型] 查询: {query}", flush=True)
+            logger.info(f"[Brand][大模型] 查询: {query}")
             result, stop = await _llm_query_once(brand_name, query)
             if result:
                 return result
             if stop:
-                print("[Brand][大模型] 模型返回未找到，跳过后续大模型查询", flush=True)
+                logger.warning("[Brand][大模型] 模型返回未找到，跳过后续大模型查询")
                 break
     except Exception as e:
-        print(f"[Brand][大模型] 调用失败: {e}", flush=True)
+        logger.error(f"[Brand][大模型] 调用失败: {e}")
     return None

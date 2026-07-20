@@ -25,6 +25,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import asyncio
 import contextlib
 import sys
@@ -39,6 +41,8 @@ from config import (
     BROWSER_LAUNCH_TIMEOUT,
     CLOAKBROWSER_DIR,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +288,7 @@ class BrowserManager:
                     lock_file.unlink()
                     cleaned.append(lock_file.name)
                 except Exception as e:
-                    print(f"[BrowserManager] 清理锁文件失败 {lock_file.name}: {e}", flush=True)
+                    logger.warning(f"[BrowserManager] 清理锁文件失败 {lock_file.name}: {e}")
         return cleaned
 
     def _kill_stale_chrome_processes(self, profile_dir: str) -> list[int]:
@@ -313,7 +317,7 @@ class BrowserManager:
                     except Exception:
                         pass
         except Exception as e:
-            print(f"[BrowserManager] 清理残留进程失败（忽略）: {e}", flush=True)
+            logger.warning(f"[BrowserManager] 清理残留进程失败（忽略）: {e}")
         return killed
 
     def _diagnose_profile(self, profile_dir: str) -> None:
@@ -321,13 +325,13 @@ class BrowserManager:
         import re
         p = Path(profile_dir)
         if not p.exists():
-            print(f"[BrowserManager] 诊断: profile 目录不存在，将自动创建", flush=True)
+            logger.debug(f"[BrowserManager] 诊断: profile 目录不存在，将自动创建")
             return
 
         try:
             total_size = sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
             size_mb = total_size / (1024 * 1024)
-            print(f"[BrowserManager] 诊断: profile 目录大小 = {size_mb:.2f} MB", flush=True)
+            logger.debug(f"[BrowserManager] 诊断: profile 目录大小 = {size_mb:.2f} MB")
         except Exception:
             pass
 
@@ -340,9 +344,9 @@ class BrowserManager:
                 except Exception:
                     lock_files.append(f"{name}(?)")
         if lock_files:
-            print(f"[BrowserManager] 诊断: 发现残留锁文件 → {lock_files}", flush=True)
+            logger.debug(f"[BrowserManager] 诊断: 发现残留锁文件 → {lock_files}")
         else:
-            print(f"[BrowserManager] 诊断: 无残留锁文件", flush=True)
+            logger.debug(f"[BrowserManager] 诊断: 无残留锁文件")
 
         local_state = p / "Local State"
         if local_state.exists():
@@ -350,7 +354,7 @@ class BrowserManager:
                 content = local_state.read_text(encoding="utf-8", errors="replace")
                 m = re.search(r'"channel":"([^"]+)"', content)
                 if m:
-                    print(f"[BrowserManager] 诊断: Local State channel = {m.group(1)}", flush=True)
+                    logger.debug(f"[BrowserManager] 诊断: Local State channel = {m.group(1)}")
             except Exception:
                 pass
 
@@ -367,17 +371,17 @@ class BrowserManager:
             self._headless = headless
         actual_headless = self._headless
 
-        print(f"[BrowserManager] 准备启动浏览器 headless={actual_headless} profile={profile}", flush=True)
+        logger.info(f"[BrowserManager] 准备启动浏览器 headless={actual_headless} profile={profile}")
 
         if profile:
             self._diagnose_profile(profile)
             # 启动前清理锁文件和残留进程
             cleaned = self._cleanup_profile_locks(profile)
             if cleaned:
-                print(f"[BrowserManager] 已清理残留锁文件: {cleaned}", flush=True)
+                logger.info(f"[BrowserManager] 已清理残留锁文件: {cleaned}")
             killed = self._kill_stale_chrome_processes(profile)
             if killed:
-                print(f"[BrowserManager] 已杀掉残留进程: {killed}", flush=True)
+                logger.info(f"[BrowserManager] 已杀掉残留进程: {killed}")
 
         last_error: Exception | None = None
         for attempt in range(BROWSER_LAUNCH_RETRIES + 1):
@@ -393,9 +397,8 @@ class BrowserManager:
                 self._profile_dir = profile
                 self._last_used = time.time()
                 self._closed = False
-                print(
-                    f"[BrowserManager] 浏览器启动成功（尝试 {attempt + 1}/{BROWSER_LAUNCH_RETRIES + 1}）",
-                    flush=True,
+                logger.info(
+                    f"[BrowserManager] 浏览器启动成功（尝试 {attempt + 1}/{BROWSER_LAUNCH_RETRIES + 1}）"
                 )
                 return
             except Exception as e:
@@ -413,17 +416,16 @@ class BrowserManager:
                     )
                 )
                 if is_recoverable:
-                    print(
-                        f"[BrowserManager] 启动失败（尝试 {attempt + 1}/{BROWSER_LAUNCH_RETRIES + 1}）: {e}",
-                        flush=True,
+                    logger.warning(
+                        f"[BrowserManager] 启动失败（尝试 {attempt + 1}/{BROWSER_LAUNCH_RETRIES + 1}）: {e}"
                     )
                     if profile:
                         cleaned = self._cleanup_profile_locks(profile)
                         if cleaned:
-                            print(f"[BrowserManager] 已清理锁文件: {cleaned}", flush=True)
+                            logger.info(f"[BrowserManager] 已清理锁文件: {cleaned}")
                         killed = self._kill_stale_chrome_processes(profile)
                         if killed:
-                            print(f"[BrowserManager] 已杀掉残留进程: {killed}", flush=True)
+                            logger.info(f"[BrowserManager] 已杀掉残留进程: {killed}")
                     self._ctx = None
                     await self._close_browser()
                     await asyncio.sleep(1)
@@ -448,11 +450,11 @@ class BrowserManager:
         except Exception as e:
             err = str(e)
             if "cannot switch to a different thread" in err:
-                print("[BrowserManager] 浏览器在已退出的线程中，忽略关闭错误（资源将由 OS 回收）", flush=True)
+                logger.warning("[BrowserManager] 浏览器在已退出的线程中，忽略关闭错误（资源将由 OS 回收）")
             elif "no longer available" in err or "has been closed" in err or "TargetClosedError" in err:
-                print("[BrowserManager] 浏览器已被关闭，跳过", flush=True)
+                logger.info("[BrowserManager] 浏览器已被关闭，跳过")
             else:
-                print(f"[BrowserManager] 关闭浏览器时异常（忽略）: {e}", flush=True)
+                logger.warning(f"[BrowserManager] 关闭浏览器时异常（忽略）: {e}")
 
     async def shutdown(self) -> None:
         """彻底关闭浏览器（服务关闭时调用）"""
@@ -505,7 +507,7 @@ def _test_close_safety():
         bm = BrowserManager()
         await bm._close_browser()  # 无 ctx
         await bm._close_browser()  # 重复
-        print("[BrowserManager] _close_browser() 单元测试通过")
+        logger.info("[BrowserManager] _close_browser() 单元测试通过")
     asyncio.run(_run())
 
 

@@ -12,14 +12,14 @@ _producer = None
 
 def build_empty_result(brand: str, platform: str, task_id: str = "", error: str = "") -> dict:
     """单平台空结果（异常时兜底）。"""
-    from core.search_engine import _empty_platform_result, _format_detect_errors
+    from core.detect_result import empty_platform_result, format_detect_errors
 
     return {
         "task_id": task_id,
         "brand": brand,
         "status": "failed",
-        "results": _empty_platform_result(platform, brand),
-        "errors": _format_detect_errors(
+        "results": empty_platform_result(platform, brand),
+        "errors": format_detect_errors(
             [{"platform": platform, "message": error}] if error else []
         ),
     }
@@ -29,8 +29,8 @@ def prepare_kafka_payload(result: dict) -> dict:
     """将 detect 结果格式化为 Kafka 出站契约（单平台）。"""
     errors_raw = result.get("errors")
     if isinstance(errors_raw, list):
-        from core.search_engine import _format_detect_errors
-        errors = _format_detect_errors(errors_raw)
+        from core.detect_result import format_detect_errors
+        errors = format_detect_errors(errors_raw)
     else:
         errors = str(errors_raw or "")
 

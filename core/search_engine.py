@@ -8,6 +8,20 @@ from datetime import datetime
 from platforms import get_platform
 from platforms.base import SearchResult
 from config import RESULTS_DIR, ENABLED_PLATFORM_KEYS, filter_platform_keys
+from core.brand_match import (
+    analyze_brand_result,
+    preprocess_douyin_users,
+    preprocess_jd_users,
+    preprocess_official_website,
+    preprocess_taobao_users,
+    preprocess_xhs_users,
+)
+from core.detect_result import (
+    baidu_score_str,
+    empty_platform_result,
+    format_detect_errors,
+    wrap_platform_result,
+)
 
 
 class DetectBusyError(Exception):
@@ -41,171 +55,6 @@ def is_platform_detect_busy(platform_key: str) -> bool:
     return _detect_running and _detect_current_platform == platform_key
 
 
-def _parse_follower_count(raw: str | int | float | None) -> float | None:
-    """解析粉丝数字符串，返回浮点数或 None（无法解析时）"""
-    if raw is None:
-        return None
-    if isinstance(raw, (int, float)):
-        return float(raw)
-    s = str(raw).strip()
-    if "万" in s:
-        try:
-            return float(s.replace("万", "")) * 10000
-        except ValueError:
-            return None
-    try:
-        return float(s)
-    except ValueError:
-        return None
-
-
-# ============================================================
-# 各平台预处理：过滤 → 按品牌相似度排序 → 精简字段
-# ============================================================
-
-def _brand_name_similarity(brand: str, name: str) -> float:
-    """品牌名与账号名的相似度评分（越高越相关）。"""
-    bn = brand.replace(" ", "").strip().lower()
-    nc = name.replace(" ", "").strip().lower()
-    if not bn or not nc:
-        return 0.0
-    if bn == nc:
-        return 100.0
-    if bn in nc:
-        idx = nc.find(bn)
-        pos_bonus = max(0, 10 - idx)
-        return 85.0 + len(bn) / max(len(nc), 1) * 10 + pos_bonus
-    if nc in bn:
-        return 75.0 + len(nc) / max(len(bn), 1) * 10
-    matched = 0
-    for ch in bn:
-        if ch in nc:
-            matched += 1
-    ordered = 0
-    ni = 0
-    for ch in bn:
-        while ni < len(nc):
-            if nc[ni] == ch:
-                ordered += 1
-                ni += 1
-                break
-            ni += 1
-    overlap_score = matched / len(bn) * 35
-    order_score = ordered / len(bn) * 25
-    return overlap_score + order_score
-
-
-def _user_sort_key(u: dict, brand: str) -> tuple:
-    """主排序：品牌相似度；次排序：粉丝数、获赞数。"""
-    sim = _brand_name_similarity(brand, u.get("name", ""))
-    fc = _parse_follower_count(u.get("follower_count"))
-    lc = _parse_follower_count(u.get("like_count"))
-    return (sim, fc if fc is not None else -1, lc if lc is not None else -1)
-
-
-def _preprocess_douyin_users(users: list[dict], brand: str) -> list[dict] | None:
-    """抖音：过滤蓝V → 按品牌名相似度排序 → 取前20 → 精简字段 → URL脱敏"""
-    blue_v_users = [u for u in users if u.get("verification") == "蓝V"]
-    if not blue_v_users:
-        return None
-
-    blue_v_users.sort(key=lambda u: _user_sort_key(u, brand), reverse=True)
-
-    result = []
-    for u in blue_v_users[:20]:
-        url = u.get("profile_url", "")
-        if "?" in url:
-            url = url.split("?")[0]
-        result.append({
-            "name": u.get("name", ""),
-            "profile_url": url,
-            "account_id": u.get("douyin_id", ""),
-            "follower_count": u.get("follower_count", "") or "",
-        })
-    return result
-
-
-def _preprocess_xhs_users(users: list[dict], brand: str) -> list[dict] | None:
-    """小红书：过滤企业认证 → 按品牌名相似度排序 → 取前20 → 精简字段 → URL脱敏"""
-    verified_users = [u for u in users if u.get("verification") == "企业认证"]
-    if not verified_users:
-        return None
-
-    verified_users.sort(key=lambda u: _user_sort_key(u, brand), reverse=True)
-
-    result = []
-    for u in verified_users[:20]:
-        url = u.get("profile_url", "")
-        if "?" in url:
-            url = url.split("?")[0]
-        result.append({
-            "name": u.get("name", ""),
-            "profile_url": url,
-            "account_id": u.get("xhs_id", ""),
-            "follower_count": u.get("follower_count", "") or "",
-        })
-    return result
-
-
-def _preprocess_jd_users(users: list[dict], brand: str) -> dict | None:
-    """京东：先匹配品牌名，再匹配"官方旗舰店"，取第一个匹配"""
-    brand_users = [u for u in users if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower()]
-    official = [u for u in brand_users if "官方旗舰店" in u.get("name", "")]
-    if not official:
-        return None
-    u = official[0]
-    url = u.get("profile_url", "")
-    if "?" in url:
-        url = url.split("?")[0]
-    return {"platform": "jd", "name": u.get("name", ""), "profile_url": url}
-
-
-def _preprocess_taobao_users(users: list[dict], brand: str) -> dict | None:
-    """淘宝：先匹配品牌名，再匹配"官方旗舰店"，取第一个匹配"""
-    brand_users = [u for u in users if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower()]
-    official = [u for u in brand_users if "官方旗舰店" in u.get("name", "")]
-    if not official:
-        return None
-    u = official[0]
-    url = u.get("profile_url", "")
-    if "?" in url:
-        url = url.split("?")[0]
-    return {"platform": "taobao", "name": u.get("name", ""), "profile_url": url}
-
-
-# ============================================================
-# 百度品牌匹配分析
-# ============================================================
-
-def analyze_brand_result(brand: str, users: list[dict]) -> dict:
-    """用 brand 对 users 中的 name 或 description 做子串匹配，任意一个命中计1分。
-
-    返回值示例：``{"platform": "baidu", "score": 85, "assessment_grade": "中高"}``
-    """
-    total = len(users)
-    matched = sum(
-        1 for u in users
-        if brand.replace(" ", "").lower() in u.get("name", "").replace(" ", "").lower()
-        or brand.replace(" ", "").lower() in u.get("description", "").replace(" ", "").lower()
-    )
-    score = round(matched / total * 100) if total > 0 else 0
-
-    if score >= 90:
-        grade = "优"
-    elif score >= 75:
-        grade = "良"
-    elif score >= 60:
-        grade = "中"
-    else:
-        grade = "差"
-
-    return {
-        "platform": "baidu",
-        "score": score,
-        "assessment_grade": grade,
-    }
-
-
 # ============================================================
 # 全局缓存（搜索调度时填充，分析接口读取）
 # ============================================================
@@ -231,79 +80,36 @@ def _reset_analysis_caches() -> None:
     analysis_cache.clear()
 
 
-def _wrap_platform_result(platform: str, data: dict) -> dict:
-    return {"platform": platform, "data": data}
-
-
-def _format_detect_errors(errors: list | None) -> str:
-    if not errors:
-        return ""
-    parts: list[str] = []
-    for e in errors:
-        platform = e.get("platform", "")
-        message = str(e.get("message", "") or "").strip()
-        if not message:
-            continue
-        parts.append(f"{platform}: {message}" if platform else message)
-    return "; ".join(parts)
-
-
-def _baidu_score_str(score) -> str:
-    if score == "" or score is None:
-        return ""
-    try:
-        return str(int(score))
-    except (TypeError, ValueError):
-        return str(score)
-
-
-def _empty_platform_result(platform: str, brand: str) -> dict:
-    """单平台无数据时的空结构（对接契约）。"""
-    if platform == "official_website":
-        return _wrap_platform_result("official_website", {
-            "brand_name": brand,
-            "website": "",
-            "description": "",
-        })
-    if platform == "douyin":
-        return _wrap_platform_result("douyin", {"users": []})
-    if platform == "xiaohongshu":
-        return _wrap_platform_result("xiaohongshu", {"users": []})
-    if platform == "baidu":
-        return _wrap_platform_result("baidu", {"score": "", "assessment_grade": ""})
-    return _wrap_platform_result(platform, {})
-
-
 def _platform_result_from_cache(platform: str, brand: str) -> dict:
     """从缓存构建单平台结果；无缓存或预处理为空则返回空结构。"""
     if platform == "official_website":
         ow = preprocessed_cache.get("official_website")
         if ow:
-            return _wrap_platform_result("official_website", {
+            return wrap_platform_result("official_website", {
                 "brand_name": ow.get("brand_name", brand),
                 "website": ow.get("website", ""),
                 "description": ow.get("description", ""),
             })
-        return _empty_platform_result(platform, brand)
+        return empty_platform_result(platform, brand)
 
     if platform == "douyin":
         dy = preprocessed_cache.get("douyin")
-        return _wrap_platform_result("douyin", {"users": dy if dy else []})
+        return wrap_platform_result("douyin", {"users": dy if dy else []})
 
     if platform == "xiaohongshu":
         xhs = preprocessed_cache.get("xiaohongshu")
-        return _wrap_platform_result("xiaohongshu", {"users": xhs if xhs else []})
+        return wrap_platform_result("xiaohongshu", {"users": xhs if xhs else []})
 
     if platform == "baidu":
         bd = analysis_cache.get("baidu")
         if bd:
-            return _wrap_platform_result("baidu", {
-                "score": _baidu_score_str(bd.get("score", "")),
+            return wrap_platform_result("baidu", {
+                "score": baidu_score_str(bd.get("score", "")),
                 "assessment_grade": bd.get("assessment_grade", "") or "",
             })
-        return _empty_platform_result(platform, brand)
+        return empty_platform_result(platform, brand)
 
-    return _empty_platform_result(platform, brand)
+    return empty_platform_result(platform, brand)
 
 
 def build_detect_response(
@@ -324,7 +130,7 @@ def build_detect_response(
         "brand": brand,
         "status": status,
         "results": _platform_result_from_cache(platform_key, brand),
-        "errors": _format_detect_errors(err_list),
+        "errors": format_detect_errors(err_list),
     }
 
 
@@ -376,20 +182,6 @@ async def detect_brand_async(
         async with _get_detect_state_lock():
             _detect_running = False
             _detect_current_platform = None
-
-
-def _preprocess_official_website(users: list[dict]) -> dict | None:
-    """官网：提取品牌名、官网URL、简介"""
-    if not users:
-        return None
-    u = users[0]
-    return {
-        "platform": "official_website",
-        "brand_name": u.get("name", ""),
-        "website": u.get("profile_url", ""),
-        "description": u.get("description", ""),
-        "source": u.get("source", ""),
-    }
 
 
 def _save_result(platform_key: str, brand: str, result: dict) -> str:
@@ -448,17 +240,17 @@ async def search_platforms_async(
             # 按平台执行对应的预处理，并写入缓存
             if not result.get("error") and result.get("users"):
                 if key == "douyin":
-                    preprocessed_cache["douyin"] = _preprocess_douyin_users(result["users"], keyword)
+                    preprocessed_cache["douyin"] = preprocess_douyin_users(result["users"], keyword)
                 elif key == "xiaohongshu":
-                    preprocessed_cache["xiaohongshu"] = _preprocess_xhs_users(result["users"], keyword)
+                    preprocessed_cache["xiaohongshu"] = preprocess_xhs_users(result["users"], keyword)
                 elif key == "jd":
-                    preprocessed_cache["jd"] = _preprocess_jd_users(result["users"], keyword)
+                    preprocessed_cache["jd"] = preprocess_jd_users(result["users"], keyword)
                 elif key == "taobao":
-                    preprocessed_cache["taobao"] = _preprocess_taobao_users(result["users"], keyword)
+                    preprocessed_cache["taobao"] = preprocess_taobao_users(result["users"], keyword)
                 elif key == "baidu":
                     analysis_cache["baidu"] = analyze_brand_result(keyword, result["users"])
                 elif key == "official_website":
-                    preprocessed_cache["official_website"] = _preprocess_official_website(result["users"])
+                    preprocessed_cache["official_website"] = preprocess_official_website(result["users"])
 
             filepath = _save_result(key, keyword, result)
             result["saved_to"] = filepath
@@ -504,13 +296,13 @@ def get_aggregated_analysis() -> dict:
     if "official_website" in preprocessed_cache:
         ow = preprocessed_cache.get("official_website")
         if ow:
-            results.append(_wrap_platform_result("official_website", {
+            results.append(wrap_platform_result("official_website", {
                 "brand_name": ow.get("brand_name", brand),
                 "website": ow.get("website", ""),
                 "description": ow.get("description", ""),
             }))
         else:
-            results.append(_wrap_platform_result("official_website", {
+            results.append(wrap_platform_result("official_website", {
                 "brand_name": brand,
                 "website": "未找到",
                 "description": "",
@@ -518,16 +310,16 @@ def get_aggregated_analysis() -> dict:
 
     if "douyin" in preprocessed_cache:
         dy_data = preprocessed_cache.get("douyin")
-        results.append(_wrap_platform_result("douyin", {"users": dy_data if dy_data else []}))
+        results.append(wrap_platform_result("douyin", {"users": dy_data if dy_data else []}))
 
     if "xiaohongshu" in preprocessed_cache:
         xhs_data = preprocessed_cache.get("xiaohongshu")
-        results.append(_wrap_platform_result("xiaohongshu", {"users": xhs_data if xhs_data else []}))
+        results.append(wrap_platform_result("xiaohongshu", {"users": xhs_data if xhs_data else []}))
 
     if "baidu" in analysis_cache:
         bd = analysis_cache["baidu"]
-        results.append(_wrap_platform_result("baidu", {
-            "score": _baidu_score_str(bd.get("score", "")),
+        results.append(wrap_platform_result("baidu", {
+            "score": baidu_score_str(bd.get("score", "")),
             "assessment_grade": bd.get("assessment_grade", "") or "",
         }))
 

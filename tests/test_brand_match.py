@@ -31,10 +31,21 @@ def test_preprocess_douyin_filters_blue_v_and_strips_query():
     ]
     out = preprocess_douyin_users(users, "西屋")
     assert out is not None
-    assert len(out) == 2
+    assert len(out) == 1
     assert out[0]["name"] == "西屋"
     assert out[0]["profile_url"] == "https://y"
     assert out[0]["account_id"] == "2"
+
+
+def test_preprocess_douyin_drops_low_similarity():
+    users = [
+        {"name": "味动力官方旗舰店", "verification": "蓝V", "profile_url": "https://a", "douyin_id": "1", "follower_count": "4.7万"},
+        {"name": "何君尧JuniusHo", "verification": "蓝V", "profile_url": "https://b", "douyin_id": "2", "follower_count": "44.9万"},
+        {"name": "均瑶健康营养膳食旗舰店", "verification": "蓝V", "profile_url": "https://c", "douyin_id": "3", "follower_count": "3.4万"},
+    ]
+    out = preprocess_douyin_users(users, "均瑶润盈生物科技")
+    assert out is not None
+    assert [u["name"] for u in out] == ["均瑶健康营养膳食旗舰店"]
 
 
 def test_preprocess_douyin_none_without_blue_v():

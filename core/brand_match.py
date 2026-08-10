@@ -54,6 +54,10 @@ def brand_name_similarity(brand: str, name: str) -> float:
     return overlap_score + order_score
 
 
+# 抖音：昵称与品牌相似度低于此阈值的账号不进入结果（小红书不设此门槛）
+MIN_NAME_SIMILARITY = 5.0
+
+
 def user_sort_key(u: dict, brand: str) -> tuple:
     """主排序：品牌相似度；次排序：粉丝数、获赞数。"""
     sim = brand_name_similarity(brand, u.get("name", ""))
@@ -63,8 +67,12 @@ def user_sort_key(u: dict, brand: str) -> tuple:
 
 
 def preprocess_douyin_users(users: list[dict], brand: str) -> list[dict] | None:
-    """抖音：过滤蓝V → 按品牌名相似度排序 → 取前20 → 精简字段 → URL脱敏"""
-    blue_v_users = [u for u in users if u.get("verification") == "蓝V"]
+    """抖音：过滤蓝V → 相似度≥5 → 按品牌名相似度排序 → 取前20 → 精简字段 → URL脱敏"""
+    blue_v_users = [
+        u for u in users
+        if u.get("verification") == "蓝V"
+        and brand_name_similarity(brand, u.get("name", "")) >= MIN_NAME_SIMILARITY
+    ]
     if not blue_v_users:
         return None
 

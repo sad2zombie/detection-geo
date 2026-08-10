@@ -1,6 +1,6 @@
 {
   "name": "brand-detector",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "GEO信源检测系统",
   "main": "main.js",
   "productName": "GEO信源检测",
